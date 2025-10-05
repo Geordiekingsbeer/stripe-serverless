@@ -9,11 +9,24 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const BASE_PRICE_IN_PENCE = 499; // £4.99
 
 module.exports = async (req, res) => {
+    // 1. --- HANDLE CORS PREFLIGHT (OPTIONS request) ---
+    if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        return res.status(200).end();
+    }
+    
+    // 2. --- SET CORS HEADER FOR MAIN RESPONSE ---
+    // Allows your client (even local file:// or github.io) to receive the response
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    // 3. --- METHOD CHECK ---
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // 1. Get ALL data sent from the customer's browser
+    // 4. Get ALL data sent from the customer's browser
     const { table_ids, email, booking_date, booking_time } = req.body; 
 
     // --- Validation ---
@@ -27,7 +40,7 @@ module.exports = async (req, res) => {
     const tableCount = table_ids.length;
 
     try {
-        // 2. Create the Stripe Checkout Session
+        // 5. Create the Stripe Checkout Session
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             
@@ -47,9 +60,8 @@ module.exports = async (req, res) => {
             
             mode: 'payment',
             
-            // 3. CRITICAL: Pass ALL necessary booking data via metadata. 
+            // 6. CRITICAL: Pass ALL necessary booking data via metadata. 
             metadata: {
-                // We pass the table IDs, date, and time for the Webhook (next file) to use later.
                 table_ids_list: table_ids.join(','), 
                 customer_email: email,
                 booking_date: booking_date,
@@ -60,7 +72,7 @@ module.exports = async (req, res) => {
             cancel_url: `${req.headers.origin}/cancel`,
         });
 
-        // 4. Send the Stripe Checkout URL back to the customer's browser
+        // 7. Send the Stripe Checkout URL back to the customer's browser
         res.json({ url: session.url });
 
     } catch (error) {
