@@ -1,10 +1,9 @@
 // File: /api/create-checkout.js
-// FIX: Using modern ES Module imports and export default
+// FIX: Charges the exact 'total_pence' value sent from the client based on variable table pricing.
 
 import Stripe from 'stripe'; 
 
-// Base price per single table slot (in the lowest currency unit: pence)
-const BASE_PRICE_IN_PENCE = 499; // £4.99
+// NOTE: We no longer need BASE_PRICE_IN_PENCE here, as the client calculates the total.
 
 // Initialize Stripe client
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
@@ -26,18 +25,23 @@ export default async function (req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // 4. Get ALL data sent from the customer's browser
-    const { table_ids, email, booking_date, booking_time } = req.body; 
+    // 4. Get ALL data sent from the customer's browser, including the new 'total_pence'
+    const { table_ids, email, booking_date, booking_time, total_pence } = req.body; 
 
     // --- Validation ---
     if (!Array.isArray(table_ids) || table_ids.length === 0) {
         return res.status(400).json({ error: 'No tables selected.' });
     }
     if (!email || !booking_date || !booking_time) {
-        return res.status(400).json({ error: 'Missing required booking details (email, date, or time).' });
+        return res.status(400).json({ error: 'Missing required booking details.' });
+    }
+    // Validate the price sent by the client
+    if (typeof total_pence !== 'number' || total_pence <= 0) {
+        return res.status(400).json({ error: 'Invalid or zero total price received.' });
     }
     
     const tableCount = table_ids.length;
+    const totalDollars = (total_pence / 100).toFixed(2);
 
     try {
         // 5. Create the Stripe Checkout Session
@@ -50,17 +54,19 @@ export default async function (req, res) {
                         currency: 'gbp',
                         product_data: {
                             name: 'Premium Table Slot Booking',
-                            description: `Reservation for ${tableCount} table(s) on ${booking_date} at ${booking_time}.`,
+                            description: `Reservation for ${tableCount} table(s) on ${booking_date} at ${booking_time}. Total: £${totalDollars}.`,
                         },
-                        unit_amount: BASE_PRICE_IN_PENCE, 
+                        // CRITICAL: Use the total pence calculated by the client as the unit_amount
+                        unit_amount: total_pence, 
                     },
-                    quantity: tableCount, 
+                    // We charge the unit_amount (the total) only once
+                    quantity: 1, 
                 },
             ],
             
             mode: 'payment',
             
-            // 6. CRITICAL: Pass ALL necessary booking data via metadata. 
+            // 6. Pass ALL necessary booking data via metadata. 
             metadata: {
                 table_ids_list: table_ids.join(','), 
                 customer_email: email,
