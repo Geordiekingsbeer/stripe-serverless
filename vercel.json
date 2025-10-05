@@ -11,7 +11,6 @@
     }
   ],
   "api": {
-    // CRITICAL FIX: Tell Vercel to read the body as a raw string/Buffer for webhooks
     "bodyParser": {
       "raw": true 
     }
