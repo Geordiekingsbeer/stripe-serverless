@@ -1,11 +1,19 @@
 // File: /api/webhook.js
-// FIX: Using modern ES Module imports and export default
-// CRITICAL: Includes deep logging of the Supabase error on failure.
+// FINAL FIX: Handles Buffer/Raw Body for Stripe signature verification.
 
 import Stripe from 'stripe'; 
 import { createClient } from '@supabase/supabase-js'; 
+import { Readable } from 'stream'; // Required Node.js stream utility
 
-// --- Helper Function ---
+// Helper function to convert the raw request stream into a buffer (REQUIRED for Stripe verification)
+async function buffer(readable) {
+    const chunks = [];
+    for await (const chunk of readable) {
+        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+    }
+    return Buffer.concat(chunks);
+}
+
 // This function calculates the estimated end time based on a standard duration (e.g., 2 hours)
 function calculateEndTime(startTime) {
     // Expects "HH:MM" format, e.g., "19:00"
@@ -16,16 +24,13 @@ function calculateEndTime(startTime) {
     let endMinute = minutes;
 
     // Handle wrap-around midnight (though rare for a restaurant booking)
-    if (endHour >= 24) {
-        endHour -= 24; 
-    }
+    if (endHour >= 24) { endHour -= 24; }
 
     const endHourStr = String(endHour).padStart(2, '0');
     const endMinuteStr = String(endMinute).padStart(2, '0');
 
-    return `${endHourStr}:${endMinuteStr}`; // Returns "HH:MM"
+    return `${endHourStr}:${endMinuteStr}`;
 }
-
 
 // --- CRITICAL ENVIRONMENT VARIABLES (Loaded from Vercel settings) ---
 const SUPABASE_URL = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
@@ -48,12 +53,15 @@ export default async function (req, res) {
         return res.status(405).send('Method not allowed.');
     }
 
-    // 2. Verify the Stripe signature (Security)
+    // 2. Read the raw body stream into a buffer (CRITICAL FOR SIGNATURE CHECK)
+    // We use req because Vercel/Node.js exposes the raw stream via the request object
+    const buf = await buffer(req); 
     const sig = req.headers['stripe-signature'];
     
     try {
+        // Use the raw buffer 'buf' for verification
         event = stripe.webhooks.constructEvent(
-            req.body, sig, WEBHOOK_SECRET
+            buf, sig, WEBHOOK_SECRET
         );
     } catch (err) {
         console.error(`⚠️ Webhook signature verification failed.`, err.message);
@@ -96,13 +104,11 @@ export default async function (req, res) {
             .insert(bookingsToInsert);
 
         if (insertError) {
-            // *** CRITICAL: LOG THE SPECIFIC SUPABASE ERROR ***
             console.error('--- SUPABASE BULK INSERT FAILED ---');
             console.error('Supabase Error Code:', insertError.code);
             console.error('Supabase Error Message:', insertError.message);
             console.error('Data Attempted:', bookingsToInsert);
             console.error('-----------------------------------');
-            
             // Log the error but return 200 to Stripe to prevent retries
             return res.status(200).json({ received: true, status: 'Supabase Insert Error' });
         }
