@@ -10,9 +10,12 @@
       ]
     }
   ],
-  "api": {
-    "bodyParser": {
-      "raw": true 
+  "functions": {
+    // CRITICAL: Apply the raw body parser only to the webhook file
+    "api/webhook.js": {
+      "bodyParser": {
+        "raw": true
+      }
     }
   }
 }
