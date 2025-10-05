@@ -1,5 +1,10 @@
 // File: /api/webhook.js
+// FIX: Using modern ES Module imports and export default
 
+import Stripe from 'stripe'; 
+import { createClient } from '@supabase/supabase-js'; 
+
+// --- Helper Function ---
 // This function calculates the estimated end time based on a standard duration (e.g., 2 hours)
 function calculateEndTime(startTime) {
     // Expects "HH:MM" format, e.g., "19:00"
@@ -21,27 +26,29 @@ function calculateEndTime(startTime) {
 }
 
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { createClient } = require('@supabase/supabase-js'); 
-
 // --- CRITICAL ENVIRONMENT VARIABLES ---
+// These must be set in your Vercel Environment Variables
 const SUPABASE_URL = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
-// WARNING: This key MUST be retrieved from Vercel's environment settings.
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; 
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET; 
 // ------------------------------------
 
+// Initialize clients
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const _supaAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-module.exports = async (req, res) => {
+
+export default async function (req, res) {
+    // 1. Set CORS headers (Required for Vercel functions, even webhooks)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
     let event;
     
-    // Vercel/Node.js way to handle different request types
     if (req.method !== 'POST') {
         return res.status(405).send('Method not allowed.');
     }
 
-    // 1. Verify the Stripe signature (Security)
+    // 2. Verify the Stripe signature (Security)
     const sig = req.headers['stripe-signature'];
     
     try {
@@ -54,11 +61,11 @@ module.exports = async (req, res) => {
         return res.status(400).send(`Webhook Error: Signature verification failed.`);
     }
 
-    // 2. Handle the specific event: Payment Succeeded
+    // 3. Handle the specific event: Payment Succeeded
     if (event.type === 'checkout.session.completed') {
         const session = event.data.object;
         
-        // 3. Retrieve ALL CRITICAL data from metadata
+        // Retrieve data from metadata
         const tableIdsString = session.metadata.table_ids_list;
         const customerEmail = session.metadata.customer_email;
         const bookingDate = session.metadata.booking_date;
@@ -70,7 +77,7 @@ module.exports = async (req, res) => {
             return res.status(500).json({ received: true, status: 'Metadata Missing' });
         }
 
-        // Calculate end time based on assumed duration (2 hours)
+        // Calculate end time
         const endTime = calculateEndTime(startTime);
 
         // 4. Prepare for BULK INSERT
@@ -91,7 +98,8 @@ module.exports = async (req, res) => {
 
         if (insertError) {
             console.error('SUPABASE BULK INSERT FAILED:', insertError);
-            return res.status(200).json({ received: true, status: 'Supabase Insert Error' });
+            // Log the error but return 200 to Stripe to prevent retries
+            return res.status(200).json({ received: true, status: 'Supabase Error' });
         }
         
         console.log(`Successfully booked ${tableIdsArray.length} tables for ${customerEmail}.`);
@@ -99,4 +107,4 @@ module.exports = async (req, res) => {
 
     // 6. Return a 200 response to Stripe for all successful event handling
     res.status(200).json({ received: true });
-};
+}
