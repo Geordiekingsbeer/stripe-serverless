@@ -11,10 +11,9 @@
     }
   ],
   "api": {
-    // CRITICAL FIX: Tell Vercel NOT to parse the body for the webhook
+    // CRITICAL FIX: Tell Vercel to read the body as a raw string/Buffer for webhooks
     "bodyParser": {
-      "sizeLimit": "1mb",
-      "external": true
+      "raw": true 
     }
   }
 }
