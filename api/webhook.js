@@ -1,5 +1,6 @@
 // File: /api/webhook.js
 // FIX: Using modern ES Module imports and export default
+// CRITICAL: Includes deep logging of the Supabase error on failure.
 
 import Stripe from 'stripe'; 
 import { createClient } from '@supabase/supabase-js'; 
@@ -26,8 +27,7 @@ function calculateEndTime(startTime) {
 }
 
 
-// --- CRITICAL ENVIRONMENT VARIABLES ---
-// These must be set in your Vercel Environment Variables
+// --- CRITICAL ENVIRONMENT VARIABLES (Loaded from Vercel settings) ---
 const SUPABASE_URL = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; 
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET; 
@@ -52,7 +52,6 @@ export default async function (req, res) {
     const sig = req.headers['stripe-signature'];
     
     try {
-        // req.body must be the raw body for signature verification to work
         event = stripe.webhooks.constructEvent(
             req.body, sig, WEBHOOK_SECRET
         );
@@ -92,14 +91,20 @@ export default async function (req, res) {
         }));
 
         // 5. BULK INSERT into Supabase using the Service Role Key
-        const { error: insertError } = await _supaAdmin
+        const { data: insertData, error: insertError } = await _supaAdmin
             .from('premium_slots')
             .insert(bookingsToInsert);
 
         if (insertError) {
-            console.error('SUPABASE BULK INSERT FAILED:', insertError);
+            // *** CRITICAL: LOG THE SPECIFIC SUPABASE ERROR ***
+            console.error('--- SUPABASE BULK INSERT FAILED ---');
+            console.error('Supabase Error Code:', insertError.code);
+            console.error('Supabase Error Message:', insertError.message);
+            console.error('Data Attempted:', bookingsToInsert);
+            console.error('-----------------------------------');
+            
             // Log the error but return 200 to Stripe to prevent retries
-            return res.status(200).json({ received: true, status: 'Supabase Error' });
+            return res.status(200).json({ received: true, status: 'Supabase Insert Error' });
         }
         
         console.log(`Successfully booked ${tableIdsArray.length} tables for ${customerEmail}.`);
