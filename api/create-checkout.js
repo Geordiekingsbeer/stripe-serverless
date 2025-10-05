@@ -1,14 +1,15 @@
 // File: /api/create-checkout.js
+// FIX: Using modern ES Module imports and export default
 
-// NOTE: This file assumes you have 'stripe' installed (npm install stripe)
-// and that STRIPE_SECRET_KEY is set as an environment variable in Vercel.
-
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+import Stripe from 'stripe'; 
 
 // Base price per single table slot (in the lowest currency unit: pence)
 const BASE_PRICE_IN_PENCE = 499; // £4.99
 
-module.exports = async (req, res) => {
+// Initialize Stripe client
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
+export default async function (req, res) {
     // 1. --- HANDLE CORS PREFLIGHT (OPTIONS request) ---
     if (req.method === 'OPTIONS') {
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -18,7 +19,6 @@ module.exports = async (req, res) => {
     }
     
     // 2. --- SET CORS HEADER FOR MAIN RESPONSE ---
-    // Allows your client (even local file:// or github.io) to receive the response
     res.setHeader('Access-Control-Allow-Origin', '*');
     
     // 3. --- METHOD CHECK ---
@@ -79,4 +79,4 @@ module.exports = async (req, res) => {
         console.error('Stripe Session Creation Error:', error);
         res.status(500).json({ error: 'Failed to create Stripe Checkout session.' });
     }
-};
+}
