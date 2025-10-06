@@ -83,7 +83,8 @@ export default async function (req, res) {
                 party_size: party_size.toString() // NEW (must be string for metadata)
             },
 
-            success_url: `${req.headers.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+            success_url: `${req.headers.origin}/pick-seat.html?booking_success=true`,
+
             cancel_url: `${req.headers.origin}/cancel`,
         });
 
