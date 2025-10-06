@@ -20,26 +20,32 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         h1 { 
-            color: #388e3c; /* Success Green */
+            color: #1976d2; 
             font-size: 28px;
             margin-bottom: 10px;
+            /* Flexbox added to keep icon and text on the same line */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .icon {
+            /* Emoji uses text styling, so we remove the specific color */
+            font-size: 48px;
+            margin-right: 10px;
         }
         p {
             color: #555;
             font-size: 16px;
         }
-        .icon {
-            font-size: 48px;
-            color: #388e3c;
-            margin-bottom: 15px;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="icon">✅</div>
-        <h1>Reservation Confirmed!</h1>
-        <p>Your reservation has been successfully confirmed. We look forward to having you!</p>
+        <h1>
+            <span class="icon">🍽️</span> 
+            Reservation Confirmed!
+        </h1>
+        <p>Your reservation has been successfully confirmed, we look forward to having you!</p>
         <p>You may now close this page.</p>
     </div>
 </body>
