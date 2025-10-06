@@ -1,14 +1,13 @@
 // File: /api/webhook.js
-// FINAL VERSION: Handles raw stream reading for Stripe security and includes all Supabase logic.
+// FINAL VERSION: Handles raw stream reading, verifies signature, and bulk inserts data including new customer metadata.
 
 import Stripe from 'stripe'; 
 import { createClient } from '@supabase/supabase-js'; 
-import { Readable } from 'stream'; // Required Node.js stream utility
+import { Readable } from 'stream'; 
 
 // Helper function to convert the raw request stream into a buffer (CRITICAL for Stripe verification)
 async function buffer(readable) {
     const chunks = [];
-    // Read the stream chunks and concatenate them into a single buffer
     for await (const chunk of readable) {
         chunks.push(chunk);
     }
@@ -17,7 +16,6 @@ async function buffer(readable) {
 
 // This function calculates the estimated end time based on a standard duration (e.g., 2 hours)
 function calculateEndTime(startTime) {
-    // Expects "HH:MM" format, e.g., "19:00"
     const [hours, minutes] = startTime.split(':').map(Number);
     const durationHours = 2; // Assume a standard 2-hour booking slot
     let endHour = hours + durationHours;
@@ -25,7 +23,6 @@ function calculateEndTime(startTime) {
     if (endHour >= 24) { endHour -= 24; } // Handle wrap-around midnight
 
     const endHourStr = String(endHour).padStart(2, '0');
-    // Minutes stay the same, as we assume no partial-hour bookings
     const endMinuteStr = String(minutes).padStart(2, '0'); 
 
     return `${endHourStr}:${endMinuteStr}`;
@@ -43,7 +40,7 @@ const _supaAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 
 export default async function (req, res) {
-    // 1. Set CORS headers (Basic requirement for Vercel functions)
+    // 1. Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
 
     let event;
@@ -53,7 +50,6 @@ export default async function (req, res) {
     }
 
     // 2. Read the raw body stream into a buffer (CRITICAL FIX)
-    // This is necessary because Vercel parses the body, but Stripe needs the raw stream.
     const buf = await buffer(req); 
     const sig = req.headers['stripe-signature'];
     
@@ -65,7 +61,6 @@ export default async function (req, res) {
     } catch (err) {
         console.error('--- STRIPE SIGNATURE FAILURE ---');
         console.error(`Error: ${err.message}`);
-        console.error('--------------------------------');
         return res.status(400).send(`Webhook Error: Signature verification failed.`);
     }
 
@@ -73,11 +68,13 @@ export default async function (req, res) {
     if (event.type === 'checkout.session.completed') {
         const session = event.data.object;
         
-        // Retrieve metadata passed from create-checkout.js
+        // Retrieve ALL data from metadata
         const tableIdsString = session.metadata.table_ids_list;
         const customerEmail = session.metadata.customer_email;
         const bookingDate = session.metadata.booking_date;
         const startTime = session.metadata.booking_time;
+        const customerName = session.metadata.customer_name; // NEW
+        const partySize = session.metadata.party_size;       // NEW
         const checkoutSessionId = session.id;
 
         if (!tableIdsString || !bookingDate || !startTime) {
@@ -94,7 +91,8 @@ export default async function (req, res) {
             date: bookingDate, 
             start_time: startTime, 
             end_time: endTime, 
-            host_notes: `Order: ${checkoutSessionId}. Email: ${customerEmail}`,
+            // CRITICAL: UPDATED host_notes field to include new customer data
+            host_notes: `Name: ${customerName}, Party: ${partySize}. Email: ${customerEmail}. Order: ${checkoutSessionId}`,
         }));
 
         // 4. BULK INSERT into Supabase using the Service Role Key
@@ -105,8 +103,6 @@ export default async function (req, res) {
         if (insertError) {
             console.error('--- SUPABASE BULK INSERT FAILED ---');
             console.error('Code:', insertError.code, 'Message:', insertError.message);
-            console.error('Data Attempted:', bookingsToInsert);
-            console.error('-----------------------------------');
             return res.status(200).json({ received: true, status: 'Supabase Insert Error' });
         }
         
