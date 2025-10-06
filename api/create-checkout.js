@@ -83,7 +83,7 @@ export default async function (req, res) {
                 party_size: party_size.toString() // NEW (must be string for metadata)
             },
 
-            success_url: `${req.headers.origin}/index.html?booking_success=true`,
+            success_url: `https://stripe-serverless-phi.vercel.app/success-page.html`,
 
             cancel_url: `${req.headers.origin}/cancel`,
         });
