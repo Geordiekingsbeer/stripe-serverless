@@ -3,7 +3,7 @@
 
 import Stripe from 'stripe'; 
 
-// NOTE: We no longer need BASE_PRICE_IN_PENCE here, as the client calculates the total.
+// NOTE: BASE_PRICE_IN_PENCE is removed. The client calculates the total.
 
 // Initialize Stripe client
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
@@ -25,8 +25,11 @@ export default async function (req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // 4. Get ALL data sent from the customer's browser, including the new 'total_pence'
-    const { table_ids, email, booking_date, booking_time, total_pence } = req.body; 
+    // 4. Get ALL data sent from the customer's browser, including the new customer name/party size
+    const { 
+        table_ids, email, booking_date, booking_time, total_pence, 
+        customer_name, party_size 
+    } = req.body; 
 
     // --- Validation ---
     if (!Array.isArray(table_ids) || table_ids.length === 0) {
@@ -35,7 +38,10 @@ export default async function (req, res) {
     if (!email || !booking_date || !booking_time) {
         return res.status(400).json({ error: 'Missing required booking details.' });
     }
-    // Validate the price sent by the client
+    // New validation for customer details
+    if (!customer_name || !party_size) {
+        return res.status(400).json({ error: 'Missing customer name or party size.' });
+    }
     if (typeof total_pence !== 'number' || total_pence <= 0) {
         return res.status(400).json({ error: 'Invalid or zero total price received.' });
     }
@@ -53,8 +59,9 @@ export default async function (req, res) {
                     price_data: {
                         currency: 'gbp',
                         product_data: {
+                            // Updated description to show name and party size
                             name: 'Premium Table Slot Booking',
-                            description: `Reservation for ${tableCount} table(s) on ${booking_date} at ${booking_time}. Total: £${totalDollars}.`,
+                            description: `Reservation for ${customer_name} (Party of ${party_size}) on ${booking_date} at ${booking_time}. Total: £${totalDollars}.`,
                         },
                         // CRITICAL: Use the total pence calculated by the client as the unit_amount
                         unit_amount: total_pence, 
@@ -66,12 +73,14 @@ export default async function (req, res) {
             
             mode: 'payment',
             
-            // 6. Pass ALL necessary booking data via metadata. 
+            // 6. CRITICAL: Pass ALL booking data via metadata for the webhook
             metadata: {
                 table_ids_list: table_ids.join(','), 
                 customer_email: email,
                 booking_date: booking_date,
-                booking_time: booking_time
+                booking_time: booking_time,
+                customer_name: customer_name, // NEW
+                party_size: party_size.toString() // NEW (must be string for metadata)
             },
 
             success_url: `${req.headers.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
