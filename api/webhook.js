@@ -1,5 +1,5 @@
 // File: /api/webhook.js
-// FINAL VERSION: Includes deduplication logic to prevent multiple inserts for the same payment.
+// FINAL VERSION: Includes deduplication logic and updates status flags for clean analytics.
 
 import Stripe from 'stripe'; 
 import { createClient } from '@supabase/supabase-js'; 
@@ -87,15 +87,19 @@ export default async function (req, res) {
         }
         
         // --- NEW IDEMPOTENCY CHECK (Prevents double booking) ---
-        // Check if this booking reference already exists in premium_slots
-        const { data: existingBookings } = await _supaAdmin
+        // Check if the booking reference already exists and has been processed
+        const { data: existingProcessedBookings } = await _supaAdmin
             .from('premium_slots')
             .select('booking_ref')
-            .eq('booking_ref', bookingRef);
+            .eq('booking_ref', bookingRef)
+            .limit(1);
             
-        if (existingBookings && existingBookings.length > 0) {
+        if (existingProcessedBookings && existingProcessedBookings.length > 0) {
             console.warn(`Idempotency Check: Booking reference ${bookingRef} already exists. Skipping bulk insert.`);
             // CRITICAL: Must return 200 to Stripe to stop retries!
+            
+            // Go to step 4b immediately to ensure tracking update runs even on retry
+            await logConversionStatusUpdate(tenantId, bookingRef);
             return res.status(200).json({ received: true, status: 'Already Processed' });
         }
 
@@ -120,31 +124,33 @@ export default async function (req, res) {
             .insert(bookingsToInsert);
 
         if (insertError) {
-            console.error('--- SUPABASE BULK INSERT FAILED ---');
+            console.error('--- SUPABASE BULK INSERT FAILED (BOOKING FULFILLMENT) ---');
             console.error('Code:', insertError.code, 'Message:', insertError.message);
             return res.status(500).json({ received: true, status: 'Supabase Insert Error' });
         }
         
-        // 4b. LOG PAYMENT SUCCESS TO ENGAGEMENT TRACKING
-        const trackingConversionEvent = {
-            tenant_id: tenantId,
-            booking_ref: bookingRef,
-            event_type: 'payment_success',
-            event_source: 'stripe_webhook',
-        };
-
-        const { error: trackingError } = await _supaAdmin
-            .from('engagement_tracking')
-            .insert([trackingConversionEvent]);
-            
-        if (trackingError) {
-            console.error('--- TRACKING INSERT FAILED ---');
-            console.error('Code:', trackingError.code, 'Message:', trackingError.message);
-        }
+        // 4b. LOG PAYMENT SUCCESS STATUS (Update the tracking row)
+        await logConversionStatusUpdate(tenantId, bookingRef);
         
         console.log(`Successfully booked ${tableIdsArray.length} tables for ${customerEmail}. Funnel conversion logged.`);
     } 
 
-    // 5. Return 200 response to Stripe to acknowledge the webhook (even for non-processed events)
+    // CRITICAL: New helper function to update tracking status
+    async function logConversionStatusUpdate(tenantId, bookingRef) {
+        const { error: trackingError } = await _supaAdmin
+            .from('engagement_tracking')
+            .update({ 
+                payment_successful: true 
+            })
+            .eq('tenant_id', tenantId)
+            .eq('booking_ref', bookingRef);
+
+        if (trackingError) {
+            console.error('--- TRACKING STATUS UPDATE FAILED ---');
+            console.error('Code:', trackingError.code, 'Message:', trackingError.message);
+        }
+    }
+
+    // 5. Return 200 response to Stripe to acknowledge the webhook (FINAL STEP)
     return res.status(200).json({ received: true });
 }
