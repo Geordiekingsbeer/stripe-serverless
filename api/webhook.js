@@ -1,5 +1,5 @@
 // File: /api/webhook.js
-// FINAL VERSION: Handles raw stream reading, verifies signature, and bulk inserts data including new customer metadata.
+// FINAL VERSION: Includes deduplication logic to prevent multiple inserts for the same payment.
 
 import Stripe from 'stripe'; 
 import { createClient } from '@supabase/supabase-js'; 
@@ -77,7 +77,7 @@ export default async function (req, res) {
         const partySize = session.metadata.party_size;
         const checkoutSessionId = session.id;
         
-        // NEW: Retrieve Tracking Metadata
+        // Tracking Metadata
         const tenantId = session.metadata.tenant_id;
         const bookingRef = session.metadata.booking_ref;
 
@@ -85,6 +85,20 @@ export default async function (req, res) {
             console.error('Fulfillment Error: Critical Metadata missing (Tenant/Booking Ref).');
             return res.status(500).json({ received: true, status: 'Metadata Missing' });
         }
+        
+        // --- NEW IDEMPOTENCY CHECK (Prevents double booking) ---
+        // Check if this booking reference already exists in premium_slots
+        const { data: existingBookings } = await _supaAdmin
+            .from('premium_slots')
+            .select('booking_ref')
+            .eq('booking_ref', bookingRef);
+            
+        if (existingBookings && existingBookings.length > 0) {
+            console.warn(`Idempotency Check: Booking reference ${bookingRef} already exists. Skipping bulk insert.`);
+            // CRITICAL: Must return 200 to Stripe to stop retries!
+            return res.status(200).json({ received: true, status: 'Already Processed' });
+        }
+
 
         // Prepare for BULK INSERT into premium_slots
         const endTime = calculateEndTime(startTime);
@@ -96,11 +110,11 @@ export default async function (req, res) {
             start_time: startTime, 
             end_time: endTime, 
             host_notes: `Name: ${customerName}, Party: ${partySize}. Email: ${customerEmail}. Order: ${checkoutSessionId}`,
-            // IMPORTANT: Write the tenant ID to the booking row
             tenant_id: tenantId, 
+            booking_ref: bookingRef, // Storing the ref here helps with analytics join later
         }));
 
-        // 4a. BULK INSERT into premium_slots using the Service Role Key
+        // 4a. BULK INSERT into premium_slots
         const { error: insertError } = await _supaAdmin
             .from('premium_slots')
             .insert(bookingsToInsert);
@@ -108,10 +122,10 @@ export default async function (req, res) {
         if (insertError) {
             console.error('--- SUPABASE BULK INSERT FAILED ---');
             console.error('Code:', insertError.code, 'Message:', insertError.message);
-            return res.status(200).json({ received: true, status: 'Supabase Insert Error' });
+            return res.status(500).json({ received: true, status: 'Supabase Insert Error' });
         }
         
-        // 4b. LOG PAYMENT SUCCESS TO ENGAGEMENT TRACKING (COMPLETES FUNNEL)
+        // 4b. LOG PAYMENT SUCCESS TO ENGAGEMENT TRACKING
         const trackingConversionEvent = {
             tenant_id: tenantId,
             booking_ref: bookingRef,
@@ -131,6 +145,6 @@ export default async function (req, res) {
         console.log(`Successfully booked ${tableIdsArray.length} tables for ${customerEmail}. Funnel conversion logged.`);
     } 
 
-    // 5. Return 200 response to Stripe to acknowledge the webhook
+    // 5. Return 200 response to Stripe to acknowledge the webhook (even for non-processed events)
     return res.status(200).json({ received: true });
 }
