@@ -1,11 +1,8 @@
 // File: /api/create-checkout.js
 
-// FIX-V6: FORCING VERCEL TO RE-DEPLOY AND CLEAR CACHE
-import Stripe from 'stripe'; 
+import Stripe from 'stripe';
 
 // --- CRITICAL ENVIRONMENT VARIABLES (Must be set in Vercel Dashboard) ---
-// NOTE: Vercel automatically exposes the variables you set in the dashboard.
-
 // Initialize Stripe. Uses STRIPE_SECRET_KEY environment variable.
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -30,16 +27,17 @@ export default async function (req, res) {
             booking_date, 
             booking_time, 
             customer_email, 
-            customer_name, 
+            customer_name, // <--- THIS VARIABLE WAS NOT BEING READ CORRECTLY
             party_size, 
             total_pence, 
             tenant_id, 
-            booking_ref // CRITICAL: Your unique tracking/booking ID
+            booking_ref
         } = req.body;
 
-        // Basic input validation (optional but recommended)
+        // Basic input validation 
         if (!table_ids || total_pence === undefined || !tenant_id || !booking_ref) {
-            return res.status(400).json({ error: 'Missing critical booking or tracking metadata.' });
+             console.error("Fulfillment Error: Critical Metadata missing in request body.");
+             return res.status(400).json({ error: 'Missing critical booking or tracking metadata.' });
         }
 
         const session = await stripe.checkout.sessions.create({
@@ -49,8 +47,9 @@ export default async function (req, res) {
                     price_data: {
                         currency: 'gbp',
                         product_data: {
+                            // FIX: Ensure customer_name and party_size are used in the description
                             name: `Premium Table Slot Booking`,
-                            description: `Reservation for ${customerName} (Party of ${party_size}) on ${booking_date} at ${booking_time}. Total tables: ${table_ids.length}.`,
+                            description: `Reservation for ${customer_name} (Party of ${party_size}) on ${booking_date} at ${booking_time}. Total tables: ${table_ids.length}.`,
                         },
                         unit_amount: total_pence,
                     },
