@@ -21,29 +21,37 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
         h1 { 
-            color: #388e3c; /* Success Green */
+            /* Kept the green color for the title to signal success */
+            color: #388e3c; 
             font-size: 28px;
             margin-bottom: 10px;
+        }
+        .emoji {
+            font-size: 40px;
+            margin-bottom: 15px;
         }
         p {
             color: #555;
             font-size: 16px;
+            margin-top: 15px; /* Added spacing */
         }
-        .icon {
-            font-size: 48px;
-            color: #388e3c;
-            margin-bottom: 15px;
-        }
+        /* Ensure the unnecessary elements are hidden from the user */
+        #tracking-message { display: none !important; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="icon">✅</div>
+        
+        <div class="emoji">🍽️</div>
         <h1>Reservation Confirmed!</h1>
+        
         <p>Thank you for your payment. Your table reservation has been successfully booked for the selected date and time.</p>
-        <p id="tracking-message" style="font-size: 14px; color: #1976d2;">Confirmation status finalized.</p>
+        
+        <p id="tracking-message">Confirmation status finalized.</p>
+        
         <p>Your payment receipt has been sent to the email address you provided.</p>
-        <p>You can close this window now or return to the <a href="https://geordiekingsbeer.github.io/table-picker/pick-seat.html">floor plan</a>.</p>
+        
+        <p>You can close this window now.</p>
     </div>
 
     <script>
@@ -52,13 +60,11 @@
         const supabaseAnon = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyanZkYWJ0cXprYW9tanVpcmVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxNDM3MzQsImV4cCI6MjA3NDcxOTczNH0.wAEeowZ8Yc8K54jAxEbY-8-mM0OGciMmyz6fJb9Z1Qg';
         const _supa = supabase.createClient(supabaseUrl, supabaseAnon);
         
-        // NOTE: The primary conversion logging is now handled by the secure webhook.
-        // This success page code is now only used as a fallback.
+        // CRITICAL: This tracking logic MUST remain, even if the message is hidden.
         async function logConversionStatusFallback() {
             const urlParams = new URLSearchParams(window.location.search);
             const tenantId = urlParams.get('tenant_id');
             const bookingRef = urlParams.get('booking_ref');
-            const messageElement = document.getElementById('tracking-message');
 
             if (!tenantId || !bookingRef) return; 
 
@@ -73,14 +79,13 @@
                 return;
             }
 
-            // If we reach here, the webhook must have failed. We will log the TRUE status now.
+            // If we reach here, the webhook failed. Log the TRUE status as a fallback.
             const { error } = await _supa
                 .from('engagement_tracking')
                 .update({ payment_successful: true })
                 .eq('booking_ref', bookingRef);
 
             if (error) {
-                messageElement.textContent = "Warning: Conversion tracking update failed.";
                 console.error('Fallback Tracking Failed:', error);
             }
         }
