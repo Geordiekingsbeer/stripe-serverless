@@ -4,12 +4,13 @@
     <meta charset="utf-8"/>
     <title>Booking Confirmed!</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { 
             font-family: Arial, sans-serif; 
             text-align: center; 
             padding: 50px; 
-            background: #e6f7ff; 
+            background: #f7f7f7;
         }
         .container {
             max-width: 600px;
@@ -17,33 +18,75 @@
             padding: 30px;
             background: #fff;
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
         h1 { 
-            /* CHANGE: Dark Green color for success */
-            color: #388e3c; 
+            color: #388e3c; /* Success Green */
             font-size: 28px;
             margin-bottom: 10px;
-        }
-        .emoji {
-            /* Emoji is inline with text, adding slight left margin */
-            font-size: 32px;
-            margin-left: 10px;
         }
         p {
             color: #555;
             font-size: 16px;
         }
+        .icon {
+            font-size: 48px;
+            color: #388e3c;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>
-            Reservation Confirmed!
-            <span class="emoji">🍽️</span> 
-        </h1>
-        <p>Your reservation has been successfully confirmed, we look forward to having you!</p>
-        <p>You may now close this page.</p>
+        <div class="icon">✅</div>
+        <h1>Reservation Confirmed!</h1>
+        <p>Thank you for your payment. Your table reservation has been successfully booked for the selected date and time.</p>
+        <p id="tracking-message" style="font-size: 14px; color: #1976d2;">(Processing confirmation data...)</p>
+        <p>Your payment receipt has been sent to the email address you provided.</p>
+        <p>You can close this window now or return to the <a href="https://geordiekingsbeer.github.io/table-picker/pick-seat.html">floor plan</a>.</p>
     </div>
+
+    <script>
+        // --- Supabase Setup (MUST MATCH YOUR KEYS) ---
+        const supabaseUrl = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
+        const supabaseAnon = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyanZkYWJ0cXprYW9tanVpcmVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxNDM3MzQsImV4cCI6MjA3NDcxOTczNH0.wAEeowZ8Yc8K54jAxEbY-8-mM0OGciMmyz6fJb9Z1Qg';
+        const _supa = supabase.createClient(supabaseUrl, supabaseAnon);
+        
+        // Function to log the payment success conversion
+        async function logPaymentSuccess() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tenantId = urlParams.get('tenant_id');
+            const bookingRef = urlParams.get('booking_ref');
+            const messageElement = document.getElementById('tracking-message');
+
+            if (!tenantId || !bookingRef) {
+                messageElement.textContent = "Error: Could not finalize tracking (Missing IDs in URL).";
+                console.error("Tracking Error: Missing tenant_id or booking_ref in success URL.");
+                return;
+            }
+
+            const trackingEvent = {
+                tenant_id: tenantId,
+                booking_ref: bookingRef,
+                event_type: 'payment_success',
+                event_source: 'stripe_redirect_success', // Source is the redirect page
+            };
+
+            const { error } = await _supa
+                .from('engagement_tracking')
+                .insert([trackingEvent]);
+
+            if (error) {
+                messageElement.textContent = `Error: Failed to log conversion. Code: ${error.code}. (Webhook may still have succeeded.)`;
+                console.error('Tracking Insert Failure (Success Page):', error);
+            } else {
+                messageElement.textContent = "Booking confirmation status successfully logged.";
+                console.log(`Tracking: Logged 'payment_success' for booking ${bookingRef}.`);
+            }
+        }
+
+        // Run the logging function immediately when the page loads
+        document.addEventListener('DOMContentLoaded', logPaymentSuccess);
+    </script>
 </body>
 </html>
