@@ -41,7 +41,7 @@
         <div class="icon">✅</div>
         <h1>Reservation Confirmed!</h1>
         <p>Thank you for your payment. Your table reservation has been successfully booked for the selected date and time.</p>
-        <p id="tracking-message" style="font-size: 14px; color: #1976d2;">(Processing confirmation data...)</p>
+        <p id="tracking-message" style="font-size: 14px; color: #1976d2;">Confirmation status finalized.</p>
         <p>Your payment receipt has been sent to the email address you provided.</p>
         <p>You can close this window now or return to the <a href="https://geordiekingsbeer.github.io/table-picker/pick-seat.html">floor plan</a>.</p>
     </div>
@@ -52,41 +52,40 @@
         const supabaseAnon = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyanZkYWJ0cXprYW9tanVpcmVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxNDM3MzQsImV4cCI6MjA3NDcxOTczNH0.wAEeowZ8Yc8K54jAxEbY-8-mM0OGciMmyz6fJb9Z1Qg';
         const _supa = supabase.createClient(supabaseUrl, supabaseAnon);
         
-        // Function to log the payment success conversion
-        async function logPaymentSuccess() {
+        // NOTE: The primary conversion logging is now handled by the secure webhook.
+        // This success page code is now only used as a fallback.
+        async function logConversionStatusFallback() {
             const urlParams = new URLSearchParams(window.location.search);
             const tenantId = urlParams.get('tenant_id');
             const bookingRef = urlParams.get('booking_ref');
             const messageElement = document.getElementById('tracking-message');
 
-            if (!tenantId || !bookingRef) {
-                messageElement.textContent = "Error: Could not finalize tracking (Missing IDs in URL).";
-                console.error("Tracking Error: Missing tenant_id or booking_ref in success URL.");
+            if (!tenantId || !bookingRef) return; 
+
+            // Check if the webhook already succeeded (the booking exists in premium_slots)
+            const { data: bookingData } = await _supa
+                .from('premium_slots')
+                .select('id')
+                .eq('booking_ref', bookingRef);
+            
+            if (bookingData && bookingData.length > 0) {
+                // Booking was already fulfilled by the webhook. Do nothing.
                 return;
             }
 
-            const trackingEvent = {
-                tenant_id: tenantId,
-                booking_ref: bookingRef,
-                event_type: 'payment_success',
-                event_source: 'stripe_redirect_success', // Source is the redirect page
-            };
-
+            // If we reach here, the webhook must have failed. We will log the TRUE status now.
             const { error } = await _supa
                 .from('engagement_tracking')
-                .insert([trackingEvent]);
+                .update({ payment_successful: true })
+                .eq('booking_ref', bookingRef);
 
             if (error) {
-                messageElement.textContent = `Error: Failed to log conversion. Code: ${error.code}. (Webhook may still have succeeded.)`;
-                console.error('Tracking Insert Failure (Success Page):', error);
-            } else {
-                messageElement.textContent = "Booking confirmation status successfully logged.";
-                console.log(`Tracking: Logged 'payment_success' for booking ${bookingRef}.`);
+                messageElement.textContent = "Warning: Conversion tracking update failed.";
+                console.error('Fallback Tracking Failed:', error);
             }
         }
 
-        // Run the logging function immediately when the page loads
-        document.addEventListener('DOMContentLoaded', logPaymentSuccess);
+        document.addEventListener('DOMContentLoaded', logConversionStatusFallback);
     </script>
 </body>
 </html>
