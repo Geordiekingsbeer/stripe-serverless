@@ -1,6 +1,7 @@
 // File: /api/create-checkout.js
 
-import Stripe from 'stripe';
+// FIX-V6: FORCING VERCEL TO RE-DEPLOY AND CLEAR CACHE
+import Stripe from 'stripe'; 
 
 // --- CRITICAL ENVIRONMENT VARIABLES (Must be set in Vercel Dashboard) ---
 // NOTE: Vercel automatically exposes the variables you set in the dashboard.
