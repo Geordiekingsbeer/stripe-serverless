@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Readable } from 'stream'; 
 
 // NOTE: MAKE/ZAPIER NOTIFICATION URL (Confirmed: vk4e7bupgsynan7olb6k1a4lxpdnwtwy)
-const MAKE_NOTIFICATION_URL = 'https://hook.eu2.make.com/vk4e7bupgsynan7olb6k1a4lxpdnwtwy'; 
+const MAKE_NOTIFICATION_URL = 'https://hook.eu2.make.com/ep5oyssqwsb8of2uclum7a3ieiwjwnnn'; 
 
 // Helper function to convert the raw request stream into a buffer (CRITICAL for Stripe verification)
 async function buffer(readable) {
