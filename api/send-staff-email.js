@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     // 2. Fetch the restaurant's email (where the notification should go)
     //    You might need to query Supabase again here if you don't store it in Vercel.
     //    For this example, we'll use a hardcoded email, but you should fetch it based on tenant_id.
-    const staffEmail = 'staff@yourrestaurant.com'; // **CRITICAL: Replace with logic to get the correct staff email**
+    const staffEmail = 'geordie@dine-select.com'; // **CRITICAL: Replace with logic to get the correct staff email**
 
     try {
         // 3. Construct the email content
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
         //    (This is pseudo-code for the email sending process)
         await sendEmail({
             to: staffEmail,
-            from: 'system@yourdomain.com',
+            from: 'geordie@dineselect.co',
             subject: subject,
             text: body,
         });
