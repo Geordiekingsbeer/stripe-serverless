@@ -1,12 +1,12 @@
-// api/webhook.js (Stripe Webhook Handler - FINAL HARDENING)
+// api/webhook.js (Stripe Webhook Handler - FINAL FIX)
 
 import { buffer } from 'micro';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
 // --- Configuration Checks ---
+// CRITICAL: Ensure these three keys are set in Vercel ENV
 const supabaseUrl = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
-
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
@@ -59,15 +59,12 @@ export default async function handler(req, res) {
     let event;
 
     try {
-        // 4. Verify the Stripe signature for security
         event = stripe.webhooks.constructEvent(buf, signature, STRIPE_WEBHOOK_SECRET);
     } catch (err) {
-        // This log is for manual test errors or actual failures
         console.error(`⚠️ Webhook signature verification failed: ${err.message}`);
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    // 5. Handle the 'checkout.session.completed' event
     if (event.type === 'checkout.session.completed') {
         const session = event.data.object;
         const metadata = session.metadata;
@@ -77,11 +74,9 @@ export default async function handler(req, res) {
             return res.status(400).json({ received: true, message: 'Missing metadata.' });
         }
 
-        // --- Prepare Data ---
         try {
             const tableIds = JSON.parse(metadata.table_ids);
             
-            // Validate parsed tableIds
             if (!Array.isArray(tableIds) || tableIds.length === 0) {
                  throw new Error("Parsed table_ids is empty or not an array.");
             }
@@ -96,6 +91,8 @@ export default async function handler(req, res) {
                 party: metadata.party_size,
                 ref: metadata.booking_ref || 'N/A'
             };
+            
+            const customerEmail = metadata.customer_email || session.customer_details?.email || 'N/A';
 
             const insertions = tableIds.map(id => ({
                 tenant_id: tenantId,
@@ -104,7 +101,10 @@ export default async function handler(req, res) {
                 start_time: bookingTime + ':00',
                 end_time: endTime,
                 host_notes: `Customer: ${customerInfo.name}, Party: ${customerInfo.party}, Ref: ${customerInfo.ref}, Stripe ID: ${session.id}`,
-                customer_email: session.customer_details?.email || metadata.customer_email || 'N/A',
+                // --- FIX: Assuming database column name is 'email' ---
+                email: customerEmail, 
+                // --- If your database column is 'customer_contact' use: customer_contact: customerEmail,
+                // ----------------------------------------------------
                 is_premium: true,
             }));
 
@@ -112,28 +112,24 @@ export default async function handler(req, res) {
             const { error: insertError } = await supabase
                 .from('premium_slots')
                 .insert(insertions, { 
-                    // CRITICAL RLS BYPASS: Use returning: 'minimal' and defaultToNull to force server mode
                     returning: 'minimal',
                     defaultToNull: true
                 });
 
             if (insertError) {
-                // Log the precise database error for debugging
-                console.error('Supabase RLS/Insert CRITICAL Failure:', insertError.message, 'Payload:', JSON.stringify(insertions));
+                console.error('Supabase RLS/Insert CRITICAL Failure (Final Log):', insertError.message, 'Payload:', JSON.stringify(insertions));
                 throw new Error(insertError.message);
             }
 
-            console.log(`Successfully recorded ${insertions.length} premium booking(s) for tenant ${tenantId}.`);
+            console.log(`SUCCESS: Recorded ${insertions.length} premium booking(s) for tenant ${tenantId}.`);
             
             return res.status(200).json({ received: true, message: 'Bookings recorded successfully.' });
 
         } catch (dbError) {
             console.error('Webhook Runtime/DB Operation Failed:', dbError.message);
-            // Return 500 status to Stripe to request a retry
             return res.status(500).json({ received: false, error: 'Database operation failed.', detail: dbError.message });
         }
     }
 
-    // 7. Respond to all other Stripe events with 200 OK
     return res.status(200).json({ received: true, message: `Handled event: ${event.type}` });
 }
