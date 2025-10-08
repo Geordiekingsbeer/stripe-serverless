@@ -1,13 +1,11 @@
 // api/webhook.js (Stripe Webhook Handler)
 
-// Vercel helpers for reading the raw request body
 import { buffer } from 'micro';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
 // --- Configuration ---
 // IMPORTANT: Use the Service Role Key for secure server-side access to Supabase
-// These ENV variables MUST be set in your Vercel Dashboard
 const supabaseUrl = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -16,14 +14,16 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
 // Initialize Supabase Client
 if (!SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is missing in environment variables.");
+    console.error("SUPABASE_SERVICE_ROLE_KEY is missing!");
+    throw new Error("Missing Supabase Service Role Key.");
 }
 const supabase = createClient(supabaseUrl, SUPABASE_SERVICE_ROLE_KEY);
 
 
 // Initialize Stripe Client
 if (!STRIPE_SECRET_KEY) {
-    throw new Error("STRIPE_SECRET_KEY is missing in environment variables.");
+    console.error("STRIPE_SECRET_KEY is missing!");
+    throw new Error("Missing Stripe Secret Key.");
 }
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
     apiVersion: '2022-11-15',
@@ -37,14 +37,13 @@ export const config = {
     },
 };
 
-// Helper function to handle time duration
+// Helper function to handle time duration (assuming 1-hour booking)
 function calculateEndTime(startTime) {
     const [h, m] = startTime.split(':').map(Number);
     const date = new Date();
     date.setHours(h);
     date.setMinutes(m);
     
-    // Assuming 1-hour booking duration (standard for premium slots)
     date.setHours(date.getHours() + 1);
     
     const endH = String(date.getHours()).padStart(2, '0');
@@ -83,7 +82,7 @@ export default async function handler(req, res) {
         }
 
         // --- Prepare Data ---
-        const tableIds = JSON.parse(metadata.table_ids); // Table IDs as an array
+        const tableIds = JSON.parse(metadata.table_ids);
         const bookingDate = metadata.booking_date;
         const bookingTime = metadata.booking_time;
         const tenantId = metadata.tenant_id;
@@ -107,27 +106,29 @@ export default async function handler(req, res) {
         }));
 
         try {
-            // 3. Insert the records into Supabase
+            // 3. Insert the records into Supabase, adding the RLS bypass option
             const { error: insertError } = await supabase
                 .from('premium_slots')
-                .insert(insertions);
+                .insert(insertions, { 
+                    // CRITICAL FIX: Add an option to minimize response, which helps bypass RLS conflicts
+                    returning: 'minimal' 
+                });
 
             if (insertError) {
-                console.error('Supabase Insert Error:', insertError);
-                // Throw error to trigger the 500 response below
+                // Log the precise error message from Supabase before crashing
+                console.error('Supabase RLS/Insert Error:', insertError.message, 'Payload:', JSON.stringify(insertions));
                 throw new Error(insertError.message);
             }
 
             console.log(`Successfully recorded ${insertions.length} premium booking(s) for tenant ${tenantId}.`);
             
-            // CRITICAL: The Supabase trigger fires immediately after this insert,
-            // which calls your working /api/send-staff-email function.
+            // The Supabase trigger fires automatically here.
 
             return res.status(200).json({ received: true, message: 'Bookings recorded successfully.' });
 
         } catch (dbError) {
             console.error('Database Operation Failed:', dbError.message);
-            // Return 500 status to Stripe to request a retry of the webhook
+            // Return 500 status to Stripe to request a retry
             return res.status(500).json({ received: false, error: 'Database operation failed.', detail: dbError.message });
         }
     }
