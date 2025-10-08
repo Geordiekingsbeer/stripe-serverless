@@ -1,5 +1,5 @@
 // File: /api/webhook.js
-// FINAL DEFINITIVE VERSION: Ensures the external fetch is robustly handled.
+// FINAL DEFINITIVE VERSION: Minimalist fulfillment payload to eliminate schema crashes.
 
 import Stripe from 'stripe'; 
 import { createClient } from '@supabase/supabase-js'; 
@@ -99,7 +99,7 @@ export default async function (req, res) {
         const endTime = calculateEndTime(startTime);
         const tableIdsArray = tableIdsString.split(',').map(id => Number(id));
 
-        // Create Minimal Payload
+        // CRITICAL FIX: MINIMAL PAYLOAD
         const bookingsToInsert = tableIdsArray.map(tableId => ({
             table_id: tableId,
             date: bookingDate, 
@@ -107,8 +107,7 @@ export default async function (req, res) {
             end_time: endTime, 
             tenant_id: tenantId, 
             booking_ref: bookingRef,
-            host_notes: null,
-            stripe_order_id: session.id,
+            // REMOVING host_notes and stripe_order_id from this payload to ensure the INSERT succeeds.
         }));
 
         // 3. BULK INSERT into premium_slots (THE FULFILLMENT STEP)
@@ -117,7 +116,9 @@ export default async function (req, res) {
             .insert(bookingsToInsert);
 
         if (insertError) {
-            console.error('--- SUPABASE BULK INSERT FAILED (BOOKING FULFILLMENT) ---');
+            console.error('--- SUPABASE BULK INSERT FAILED (FINAL BOOKING CRASH) ---');
+            console.error('Code:', insertError.code, 'Message:', insertError.message);
+            // Returning 500 signals Stripe to retry, which is correct since fulfillment failed.
             return res.status(500).json({ received: false, status: 'Fulfillment Insert Failed' });
         }
         
@@ -139,8 +140,8 @@ export default async function (req, res) {
             totalValue: (totalPence / 100).toFixed(2), // Convert pence to currency
             customerEmail: customerEmail,
         };
-        
-        // CRITICAL FIX: Use the specific, clean fetch call
+
+        // Trigger Make/Zapier notification (Fire-and-forget for speed)
         if (MAKE_NOTIFICATION_URL && MAKE_NOTIFICATION_URL !== 'YOUR_MAKE_WEBHOOK_URL_HERE') {
             fetch(MAKE_NOTIFICATION_URL, {
                 method: 'POST',
@@ -148,11 +149,11 @@ export default async function (req, res) {
                 body: JSON.stringify(notificationPayload),
             }).catch(e => console.error("Make/Zapier Notification Failed:", e.message));
         }
-
+        
         console.log(`Successfully fulfilled booking ${bookingRef}.`);
     } 
 
-    // Helper function to update tracking status
+    // CRITICAL: New helper function to update tracking status
     async function logConversionStatusUpdate(tenantId, bookingRef) {
         const { error: trackingError } = await _supaAdmin
             .from('engagement_tracking')
