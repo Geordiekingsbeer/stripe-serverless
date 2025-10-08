@@ -6,12 +6,11 @@ import Stripe from 'stripe';
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 export default async function (req, res) {
-    // Set CORS headers for security and browser compatibility
+    // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Handle the preflight OPTIONS request
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
@@ -33,7 +32,6 @@ export default async function (req, res) {
             booking_ref
         } = req.body;
 
-        // Basic input validation 
         if (!table_ids || total_pence === undefined || !tenant_id || !booking_ref) {
             console.error("Fulfillment Error: Critical Metadata missing in request body.");
             return res.status(400).json({ error: 'Missing critical booking or tracking metadata.' });
@@ -56,19 +54,16 @@ export default async function (req, res) {
             ],
             mode: 'payment',
             
-            // CRITICAL FIX: Pass tracking IDs back to the success page URL
+            // Success URL includes tracking data and session ID for fulfillment validation
             success_url: `https://stripe-serverless-phi.vercel.app/success-page.html?tenant_id=${tenant_id}&booking_ref=${booking_ref}&session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: 'https://geordiekingsbeer.github.io/table-picker/customer.html',
             
-            // Pass ALL necessary data for the webhook and database insert
+            // CRITICAL FIXES: Key names and stringification for webhook compatibility
             metadata: {
-                // *** CRITICAL FIX 1: Rename key to 'table_ids' and stringify the array ***
-                table_ids: JSON.stringify(table_ids),
-                
-                // Other essential data (ensure these are strings)
+                table_ids: JSON.stringify(table_ids), // Webhook expects 'table_ids' and it must be a string
                 booking_date: booking_date,
                 booking_time: booking_time,
-                customer_email: customer_email,
+                customer_email: customer_email, // Passed explicitly for use in webhook logic
                 customer_name: customer_name,
                 party_size: party_size.toString(),
                 tenant_id: tenant_id,
