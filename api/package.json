@@ -1,9 +1,22 @@
 {
-  "name": "stripe-serverless",
+  "name": "stripe-serverless-phi",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Vercel serverless functions for booking and payment processing.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "stripe",
+    "supabase",
+    "vercel"
+  ],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "stripe": "^12.0.0",
-    "@supabase/supabase-js": "^2.0.0"
+    "@supabase/supabase-js": "^2.43.3",
+    "micro": "^10.0.1",
+    "nodemailer": "^6.9.13",
+    "stripe": "^19.1.0"
   }
 }
