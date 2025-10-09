@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     const data = await micro.json(req);
 
     // Example Supabase insert (replace with your actual logic)
-    const { error } = await supabase.from('layouts').insert([{ layout: data.layout }]);
+    const { error } = await supabase.from('tables').insert([{ layout: data.layout }]);
     if (error) throw error;
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
