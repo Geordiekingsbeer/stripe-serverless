@@ -1,56 +1,43 @@
-// api/admin-save-layout.js
-
 import { createClient } from '@supabase/supabase-js';
+import micro from 'micro';
 
-const supabaseUrl = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; 
+const supabase = createClient(
+  'https://Rrjvdabtqzkaomjuiref.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyanZkYWJ0cXprYW9tanVpcmVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxNDM3MzQsImV4cCI6MjA3NDcxOTczNH0.wAEeowZ8Yc8K54jAxEbY-8-mM0OGciMmyz6fJb9Z1Qg'
+);
 
-if (!SUPABASE_SERVICE_ROLE_KEY) {
-    return res.status(500).json({ error: 'Server configuration error: Missing service role key.' });
-}
-const supabase = createClient(supabaseUrl, SUPABASE_SERVICE_ROLE_KEY);
+export default async function handler(req, res) {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    });
+    return res.end();
+  }
 
-export default async function (req, res) {
-    // --- CORS FIX ---
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // Only allow POST for this endpoint
+  if (req.method !== 'POST') {
+    res.writeHead(405, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Method not allowed' }));
+  }
 
-    // Handle preflight OPTIONS request (browser sends this first)
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
-    // --- END CORS FIX ---
+  // Set CORS headers for actual request
+  res.setHeader('Access-Control-Allow-Origin', '*');
 
-    if (req.method !== 'POST') {
-        return res.status(405).send('Method Not Allowed');
-    }
+  try {
+    const data = await micro.json(req);
 
-    try {
-        const { updates } = req.body;
+    // Example Supabase insert (replace with your actual logic)
+    const { error } = await supabase.from('layouts').insert([{ layout: data.layout }]);
+    if (error) throw error;
 
-        if (!updates || updates.length === 0) {
-            return res.status(400).json({ error: 'No updates provided.' });
-        }
-        
-        // Use Service Role to securely upsert the data, bypassing RLS
-        const { data, error } = await supabase
-            .from('tables')
-            .upsert(updates)
-            .select('id, x, y, rotation, tenant_id');
-
-        if (error) {
-            console.error('Supabase Save Error:', error.message);
-            return res.status(500).json({ error: `Database Save Failed: ${error.message}` });
-        }
-
-        return res.status(200).json({ 
-            message: 'Layout saved successfully.', 
-            data: data 
-        });
-
-    } catch (error) {
-        console.error('Admin Save API Crash:', error);
-        return res.status(500).json({ error: 'Internal server error during save.' });
-    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true }));
+  } catch (err) {
+    console.error(err);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Internal Server Error' }));
+  }
 }
