@@ -1,4 +1,4 @@
-// admin-save-layout.js (FINAL SECURE FIX)
+// admin-save-layout.js (FINAL SECURE FIX - Headers Broadened)
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -9,17 +9,17 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // Fail fast if key is missing (prevents silent crash)
 if (!SUPABASE_SERVICE_ROLE_KEY) {
-    // We can't use res.status here, so we throw and let Vercel handle the 500
+    // This throws an error that Vercel logs as a 500
     throw new Error('CRITICAL: SUPABASE_SERVICE_ROLE_KEY is missing in Vercel environment.');
 }
 
 const supabase = createClient(supabaseUrl, SUPABASE_SERVICE_ROLE_KEY);
 
 export default async function handler(req, res) {
-    // --- CORS Headers FIX ---
-    // Use universal wildcard '*' for development and cross-origin hosting
+    // --- CORS Headers FIX (Broadened for maximum compatibility) ---
+    // This MUST run before the OPTIONS handler to ensure the header is present on preflight.
     res.setHeader('Access-Control-Allow-Origin', '*'); 
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS, PUT, PATCH, DELETE'); // Broadened methods list
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     // --- Handle preflight request (CRITICAL for fixing the CORS error) ---
