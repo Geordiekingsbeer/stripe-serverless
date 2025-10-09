@@ -7,7 +7,7 @@
   ],
   "headers": [
     {
-      "source": "/function/(.*)",
+      "source": "/api/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods": "GET,OPTIONS,POST,PUT,PATCH,DELETE" },
@@ -15,11 +15,10 @@
       ]
     }
   ],
-  "redirects": [
+  "rewrites": [
     { 
-      "source": "/api/admin-save-layout", 
-      "destination": "/function/admin-save-layout", 
-      "permanent": true 
+      "source": "/api/(.*)", 
+      "destination": "/function/$1" 
     }
   ]
 }
