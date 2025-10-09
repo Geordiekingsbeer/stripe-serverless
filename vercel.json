@@ -5,17 +5,17 @@
       "use": "@vercel/node"
     }
   ],
-  "routes": [
+  "headers": [
     {
-      "src": "/function/(.*)",
-      "methods": ["OPTIONS"],
-      "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, PATCH, DELETE",
-        "Access-Control-Allow-Headers": "Content-Type"
-      },
-      "status": 204
-    },
+      "source": "/function/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods": "GET, OPTIONS, POST" },
+        { "key": "Access-Control-Allow-Headers": "Content-Type" }
+      ]
+    }
+  ],
+  "routes": [
     {
       "src": "/function/(.*)",
       "dest": "/function/$1"
