@@ -1,69 +1,53 @@
 import { createClient } from '@supabase/supabase-js';
 
+// --- CONFIG ---
+// Supabase project URL and service role key (server-side)
 const supabaseUrl = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseServiceRoleKey = 'sb_secret_nbGsaU0asg8w3ANN6DNsfg_-7sxSjtp';
+
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 export default async function handler(req, res) {
-    // --- Handle CORS preflight ---
-    if (req.method === 'OPTIONS') {
-        res.writeHead(200, {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
-        });
-        return res.end();
+  // --- CORS Headers ---
+  res.setHeader('Access-Control-Allow-Origin', 'https://geordiekingsbeer.github.io');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // --- Handle preflight request ---
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const { updates } = req.body;
+
+    if (!updates || !Array.isArray(updates)) {
+      return res.status(400).json({ error: 'Invalid payload' });
     }
 
-    // Only allow POST
-    if (req.method !== 'POST') {
-        res.writeHead(405, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-        return res.end(JSON.stringify({ error: 'Method not allowed' }));
-    }
+    // Update each table position in Supabase
+    const promises = updates.map(async (t) => {
+      return supabase
+        .from('tables')
+        .update({
+          x: t.x,
+          y: t.y,
+          rotation: t.rotation
+        })
+        .eq('id', t.id)
+        .eq('tenant_id', t.tenant_id);
+    });
 
-    // Set CORS headers for actual POST
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    await Promise.all(promises);
 
-    try {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-            const data = JSON.parse(body);
-
-            if (!data.updates || !Array.isArray(data.updates)) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ error: 'Invalid payload, expected updates array' }));
-            }
-
-            const updates = data.updates.map(t => ({
-                id: t.id,
-                x: t.x,
-                y: t.y,
-                rotation: t.rotation,
-                tenant_id: t.tenant_id
-            }));
-
-            const { data: result, error } = await supabase.from('tables').upsert(updates);
-
-            if (error) {
-                console.error('Supabase upsert error:', error);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ error: error.message }));
-            }
-
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ success: true, data: result }));
-        });
-
-        req.on('error', err => {
-            console.error('Request error:', err);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ error: 'Request parsing failed' }));
-        });
-
-    } catch (err) {
-        console.error('Handler error:', err);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: 'Internal Server Error' }));
-    }
+    // Return success + optionally the updated data
+    res.status(200).json({ success: true, data: updates });
+  } catch (error) {
+    console.error('Error saving layout:', error);
+    res.status(500).json({ error: error.message });
+  }
 }
