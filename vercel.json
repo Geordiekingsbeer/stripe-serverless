@@ -1,11 +1,11 @@
 {
-  "installCommand": "npm install",
   "builds": [
     {
       "src": "api/*.js",
       "use": "@vercel/node"
     }
   ],
+  "installCommand": "npm install",
   "headers": [
     {
       "source": "/api/(.*)",
