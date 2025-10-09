@@ -1,14 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
-import micro from 'micro';
 
-// Use Vercel environment variables for security
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // DO NOT HARDCODE
 
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 export default async function handler(req, res) {
-    // Handle CORS preflight
+    // --- Handle CORS preflight ---
     if (req.method === 'OPTIONS') {
         res.writeHead(200, {
             'Access-Control-Allow-Origin': '*',
@@ -18,36 +16,52 @@ export default async function handler(req, res) {
         return res.end();
     }
 
+    // Only allow POST
     if (req.method !== 'POST') {
         res.writeHead(405, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: 'Method not allowed' }));
     }
 
-    // Set CORS header for actual request
+    // Set CORS headers for actual POST
     res.setHeader('Access-Control-Allow-Origin', '*');
 
     try {
-        const data = await micro.json(req);
+        // Read JSON body
+        const data = await new Promise((resolve, reject) => {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', () => resolve(JSON.parse(body)));
+            req.on('error', err => reject(err));
+        });
 
-        // Make sure the payload has "updates"
         if (!data.updates || !Array.isArray(data.updates)) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ error: 'Invalid payload' }));
+            return res.end(JSON.stringify({ error: 'Invalid payload, expected updates array' }));
         }
 
-        // Insert or upsert layout updates into your "tables" table
-        const { error } = await supabase
-            .from('tables') // Your table is named "tables"
-            .upsert(data.updates, { onConflict: ['id'] });
+        // Save each table layout update
+        const updates = data.updates.map(t => ({
+            id: t.id,
+            x: t.x,
+            y: t.y,
+            rotation: t.rotation,
+            tenant_id: t.tenant_id
+        }));
 
-        if (error) throw error;
+        const { data: result, error } = await supabase.from('tables').upsert(updates);
+
+        if (error) {
+            console.error('Supabase upsert error:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: error.message }));
+        }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, data: data.updates }));
+        return res.end(JSON.stringify({ success: true, data: result }));
 
     } catch (err) {
-        console.error('Error in admin-save-layout:', err.message);
+        console.error('Handler error:', err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Internal Server Error' }));
+        return res.end(JSON.stringify({ error: 'Internal Server Error' }));
     }
 }
