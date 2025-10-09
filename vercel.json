@@ -10,8 +10,8 @@
       "source": "/api/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods": "GET,OPTIONS,POST,PUT,PATCH,DELETE" },
-        { "key": "Access-Control-Allow-Headers": "Content-Type" }
+        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,POST,PUT,PATCH,DELETE" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
       ]
     }
   ],
