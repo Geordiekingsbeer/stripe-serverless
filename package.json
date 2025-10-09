@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "scripts": {
     "vercel-build": "echo \"Building API functions...\""
   },
