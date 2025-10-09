@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import micro from 'micro';
 
+// ✅ Replace with your Supabase URL and Service Role Key in Vercel environment variables
 const supabase = createClient(
-  'https://Rrjvdabtqzkaomjuiref.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyanZkYWJ0cXprYW9tanVpcmVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxNDM3MzQsImV4cCI6MjA3NDcxOTczNH0.wAEeowZ8Yc8K54jAxEbY-8-mM0OGciMmyz6fJb9Z1Qg'
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 export default async function handler(req, res) {
@@ -17,7 +18,7 @@ export default async function handler(req, res) {
     return res.end();
   }
 
-  // Only allow POST for this endpoint
+  // Only allow POST requests
   if (req.method !== 'POST') {
     res.writeHead(405, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ error: 'Method not allowed' }));
@@ -27,10 +28,14 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   try {
+    // Parse incoming JSON from the request body
     const data = await micro.json(req);
 
-    // Example Supabase insert (replace with your actual logic)
-    const { error } = await supabase.from('tables').insert([{ layout: data.layout }]);
+    // ✅ Replace 'tables' with the name of your Supabase table
+    const { error } = await supabase
+      .from('tables')  // <-- Make sure this matches your actual table
+      .insert([{ layout: data.layout }]);  // <-- 'layout' should match the key your front-end sends
+
     if (error) throw error;
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
