@@ -5,20 +5,20 @@
       "use": "@vercel/node"
     }
   ],
-  "headers": [
+  "routes": [
     {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,POST,PUT,PATCH,DELETE" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
-      ]
-    }
-  ],
-  "rewrites": [
+      "src": "/api/(.*)",
+      "methods": ["OPTIONS"],
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, PATCH, DELETE",
+        "Access-Control-Allow-Headers": "Content-Type"
+      },
+      "status": 204
+    },
     {
-      "source": "/api/(.*)",
-      "destination": "/function/$1"
+      "src": "/api/(.*)",
+      "dest": "/function/$1"
     }
   ]
 }
