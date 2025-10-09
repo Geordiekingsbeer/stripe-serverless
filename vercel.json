@@ -1,24 +1,12 @@
 {
-  "builds": [
+  "headers": [
     {
-      "src": "function/*.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "methods": ["OPTIONS"],
-      "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, PATCH, DELETE",
-        "Access-Control-Allow-Headers": "Content-Type"
-      },
-      "status": 204
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "/function/$1"
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,POST,PUT,PATCH,DELETE" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
     }
   ]
 }
