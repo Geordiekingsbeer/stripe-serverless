@@ -3,7 +3,6 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
-// NOTE: This MUST be the SUPABASE_SERVICE_ROLE_KEY from Vercel ENV
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; 
 
 if (!SUPABASE_SERVICE_ROLE_KEY) {
@@ -12,6 +11,17 @@ if (!SUPABASE_SERVICE_ROLE_KEY) {
 const supabase = createClient(supabaseUrl, SUPABASE_SERVICE_ROLE_KEY);
 
 export default async function (req, res) {
+    // --- CORS FIX ---
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Handle preflight OPTIONS request (browser sends this first)
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+    // --- END CORS FIX ---
+
     if (req.method !== 'POST') {
         return res.status(405).send('Method Not Allowed');
     }
