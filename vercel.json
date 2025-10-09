@@ -10,15 +10,16 @@
       "source": "/function/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods": "GET, OPTIONS, POST" },
+        { "key": "Access-Control-Allow-Methods": "GET,OPTIONS,POST,PUT,PATCH,DELETE" },
         { "key": "Access-Control-Allow-Headers": "Content-Type" }
       ]
     }
   ],
-  "routes": [
-    {
-      "src": "/function/(.*)",
-      "dest": "/function/$1"
+  "redirects": [
+    { 
+      "source": "/api/admin-save-layout", 
+      "destination": "/function/admin-save-layout", 
+      "permanent": true 
     }
   ]
 }
