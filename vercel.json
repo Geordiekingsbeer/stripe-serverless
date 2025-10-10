@@ -1,12 +1,8 @@
 {
   "builds": [
     {
-      "src": "function/*.js",
+      "src": "api/*.js",
       "use": "@vercel/node"
-    },
-    {
-      "src": "admin.html",
-      "use": "@vercel/static"
     }
   ],
   "headers": [
@@ -17,12 +13,6 @@
         { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,POST,PUT,PATCH,DELETE" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
       ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
     }
   ]
 }
