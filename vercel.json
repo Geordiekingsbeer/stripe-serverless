@@ -7,7 +7,7 @@
   ],
   "headers": [
     {
-      "source": "/api/create-checkout",
+      "source": "/api/checkout-session",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "https://geordiekingsbeer.github.io" },
         { "key": "Access-Control-Allow-Methods", "value": "POST, OPTIONS, GET" },
@@ -17,12 +17,12 @@
   ],
   "routes": [
     { 
-      "src": "/api/create-checkout",
+      "src": "/api/checkout-session",
       "methods": ["OPTIONS"], 
       "dest": "/api/cors-preflight.js" 
     },
     { 
-      "src": "/api/create-checkout", 
+      "src": "/api/checkout-session", 
       "dest": "/api/create-checkout.js" 
     }
   ]
