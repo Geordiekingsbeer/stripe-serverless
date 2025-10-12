@@ -1,7 +1,7 @@
 {
   "builds": [
     {
-      "src": "api/*.mjs",
+      "src": "api/*.js",
       "use": "@vercel/node"
     }
   ],
@@ -19,11 +19,11 @@
     { 
       "src": "/api/create-checkout",
       "methods": ["OPTIONS"], 
-      "dest": "/api/cors-preflight.mjs" 
+      "dest": "/api/cors-preflight.js" 
     },
     { 
       "src": "/api/create-checkout", 
-      "dest": "/api/create-checkout.mjs" 
+      "dest": "/api/create-checkout.js" 
     }
   ]
 }
