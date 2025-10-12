@@ -26,24 +26,20 @@
   ],
   "routes": [
     {
-      "src": "/api/create-checkout",
+      "src": "/api/(.*)",
       "methods": [
         "OPTIONS"
       ],
-      "status": 204,
       "headers": {
         "Access-Control-Allow-Origin": "https://geordiekingsbeer.github.io",
         "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
         "Access-Control-Allow-Headers": "Content-Type, Authorization"
-      }
+      },
+      "status": 204
     },
     {
-      "src": "/api/create-checkout",
-      "methods": [
-        "POST",
-        "GET"
-      ],
-      "dest": "/api/create-checkout.js"
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     }
   ]
 }
