@@ -5,12 +5,6 @@
       "use": "@vercel/node"
     }
   ],
-  "rewrites": [
-    {
-      "source": "/checkout-api",
-      "destination": "/api/create-checkout.js"
-    }
-  ],
   "routes": [
     {
       "src": "/checkout-api",
@@ -20,6 +14,14 @@
         "Access-Control-Allow-Origin": "https://geordiekingsbeer.github.io",
         "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization"
+      }
+    },
+    {
+      "src": "/checkout-api",
+      "dest": "/api/create-checkout.js",
+      "methods": ["POST", "GET"],
+      "headers": {
+        "Access-Control-Allow-Origin": "https://geordiekingsbeer.github.io"
       }
     }
   ]
