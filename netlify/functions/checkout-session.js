@@ -3,27 +3,26 @@ import Stripe from 'stripe';
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 export default async function (req, res) {
-    // --- Define Headers Locally (CRITICAL for Netlify/Node.js Preflight Fix) ---
-    // These headers must be set for both the OPTIONS and the POST responses.
+    // --- Define Headers Locally (Final, Aggressive Headers) ---
     const corsHeaders = {
         'Access-Control-Allow-Origin': 'https://geordiekingsbeer.github.io',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
 
-    // Apply headers to the response object for ALL subsequent responses
-    Object.keys(corsHeaders).forEach(key => {
-        res.setHeader(key, corsHeaders[key]);
-    });
-
-    // --- CRITICAL: Handle OPTIONS Preflight Directly with Raw End ---
-    // The browser requires a 200 or 204 status with the headers attached before proceeding.
+    // --- CRITICAL FIX: Handle OPTIONS Preflight Directly with Raw Response ---
+    // This is the most reliable method for Node functions hosted on Netlify/Vercel.
     if (req.method === 'OPTIONS') {
-        // Use Node's low-level response methods to guarantee headers are sent instantly
+        // Use res.writeHead(status, headers) to force headers into the response stream
         res.writeHead(204, corsHeaders);
         return res.end(); 
     }
     // -------------------------------------------------------------------------
+    
+    // Set headers again for the main POST response (required by browsers)
+    Object.keys(corsHeaders).forEach(key => {
+        res.setHeader(key, corsHeaders[key]);
+    });
 
     if (req.method !== 'POST') {
         return res.status(405).send('Method not allowed. Use POST.');
