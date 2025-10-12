@@ -23,7 +23,7 @@
     },
     { 
       "src": "/api/checkout-session", 
-      "dest": "/api/create-checkout.js" 
+      "dest": "/api/checkout-session.js" 
     }
   ]
 }
