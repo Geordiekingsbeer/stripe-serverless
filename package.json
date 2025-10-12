@@ -1,7 +1,9 @@
 {
-  "type": "module",
   "scripts": {
     "vercel-build": "echo \"Building API functions...\""
+  },
+  "engines": {
+    "node": "18.x"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.43.3",
