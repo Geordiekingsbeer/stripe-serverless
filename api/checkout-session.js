@@ -3,15 +3,24 @@ import Stripe from 'stripe';
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 export default async function (req, res) {
-    // --- Manual CORS Handling (CRITICAL FIX for Vercel's Preflight Failures) ---
-    // This explicitly tells the browser that the GitHub origin is allowed.
-    res.setHeader('Access-Control-Allow-Origin', 'https://geordiekingsbeer.github.io');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    // --- Define Headers Locally for All Responses ---
+    const corsHeaders = {
+        'Access-Control-Allow-Origin': 'https://geordiekingsbeer.github.io',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    };
 
-    // Handle OPTIONS Preflight Request (MUST return 200/204 to proceed)
+    // Apply headers to the response object for ALL responses
+    Object.keys(corsHeaders).forEach(key => {
+        res.setHeader(key, corsHeaders[key]);
+    });
+
+    // --- CRITICAL: Handle OPTIONS Preflight Directly with Raw End ---
     if (req.method === 'OPTIONS') {
-        return res.status(200).end(); 
+        // Must return 204 No Content for a successful preflight.
+        // Sending the response early guarantees Vercel cannot strip the headers.
+        res.writeHead(204, corsHeaders);
+        return res.end(); 
     }
     // -------------------------------------------------------------------------
 
@@ -34,6 +43,7 @@ export default async function (req, res) {
 
         if (!table_ids || total_pence === undefined || !tenant_id || !booking_ref) {
             console.error("Fulfillment Error: Critical Metadata missing in request body.");
+            // Headers are already set on res object.
             return res.status(400).json({ error: 'Missing critical booking or tracking metadata.' });
         }
 
@@ -71,7 +81,7 @@ export default async function (req, res) {
             customer_email: customer_email,
         });
 
-        // Final 200 response will carry the headers set at the top.
+        // The final 200 response will carry the headers set at the top.
         return res.status(200).json({ sessionId: session.id, url: session.url });
     } catch (error) {
         console.error('Stripe checkout error:', error);
