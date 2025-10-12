@@ -1,0 +1,8 @@
+[build]
+  # We are using Netlify's default Node functions build
+  # No complex build command needed for this simple setup
+
+[functions]
+  # Tell Netlify where the functions directory is
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
