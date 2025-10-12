@@ -23,5 +23,25 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/create-checkout",
+      "destination": "/api/create-checkout.js"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/create-checkout",
+      "methods": [
+        "OPTIONS"
+      ],
+      "dest": "/api/create-checkout.js",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization"
+      }
+    }
   ]
 }
