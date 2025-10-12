@@ -3,24 +3,16 @@ import Stripe from 'stripe';
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 export default async function (req, res) {
-    // --- Define Headers Locally for All Responses ---
-    const corsHeaders = {
-        'Access-Control-Allow-Origin': 'https://geordiekingsbeer.github.io',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    };
+    // --- Manual CORS Handling (Highly reliable fix for Netlify) ---
+    // Netlify respects these headers set manually in the function code.
+    res.setHeader('Access-Control-Allow-Origin', 'https://geordiekingsbeer.github.io');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-    // Apply headers to the response object for ALL responses
-    Object.keys(corsHeaders).forEach(key => {
-        res.setHeader(key, corsHeaders[key]);
-    });
-
-    // --- CRITICAL: Handle OPTIONS Preflight Directly with Raw End ---
+    // Handle OPTIONS Preflight Request (MUST return 200/204 to proceed)
     if (req.method === 'OPTIONS') {
-        // Must return 204 No Content for a successful preflight.
-        // Sending the response early guarantees Vercel cannot strip the headers.
-        res.writeHead(204, corsHeaders);
-        return res.end(); 
+        // Return 200 OK status for a successful preflight
+        return res.status(200).end(); 
     }
     // -------------------------------------------------------------------------
 
@@ -43,7 +35,6 @@ export default async function (req, res) {
 
         if (!table_ids || total_pence === undefined || !tenant_id || !booking_ref) {
             console.error("Fulfillment Error: Critical Metadata missing in request body.");
-            // Headers are already set on res object.
             return res.status(400).json({ error: 'Missing critical booking or tracking metadata.' });
         }
 
@@ -64,8 +55,8 @@ export default async function (req, res) {
             ],
             mode: 'payment',
             
-            // Success URL uses the new, clean project name
-            success_url: `https://dine-checkout-live.vercel.app/success-page.html?tenant_id=${tenant_id}&booking_ref=${booking_ref}&session_id={CHECKOUT_SESSION_ID}`,
+            // Success URL updated to the new Netlify project URL
+            success_url: `https://dine-select-api.netlify.app/success-page.html?tenant_id=${tenant_id}&booking_ref=${booking_ref}&session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: 'https://geordiekingsbeer.github.io/table-picker/customer.html',
             
             metadata: {
