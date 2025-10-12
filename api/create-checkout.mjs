@@ -1,24 +1,34 @@
-// File: /api/create-checkout.js
-
 import Stripe from 'stripe';
 
 // Initialize Stripe. Uses STRIPE_SECRET_KEY environment variable.
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-export default async function (req, res) {
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+// Define CORS headers with the explicit origin for your GitHub Pages site
+const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': 'https://geordiekingsbeer.github.io',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    // Vercel often requires Content-Type and Authorization for preflight checks
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
 
+export default async function (req, res) {
+    // Apply headers to the response object for ALL responses
+    Object.keys(CORS_HEADERS).forEach(key => {
+        res.setHeader(key, CORS_HEADERS[key]);
+    });
+
+    // 1. Handle the OPTIONS Preflight Request (CRITICAL for CORS)
     if (req.method === 'OPTIONS') {
-        return res.status(200).end();
+        // Must return 204 No Content for a successful preflight
+        return res.status(204).end();
     }
 
     if (req.method !== 'POST') {
+        // Return 405 with the CORS headers already set
         return res.status(405).send('Method not allowed.');
     }
 
+    // Since Vercel automatically parses the request body, we can proceed.
     try {
         const { 
             table_ids, 
@@ -34,6 +44,7 @@ export default async function (req, res) {
 
         if (!table_ids || total_pence === undefined || !tenant_id || !booking_ref) {
             console.error("Fulfillment Error: Critical Metadata missing in request body.");
+            // 400 response should still include CORS headers
             return res.status(400).json({ error: 'Missing critical booking or tracking metadata.' });
         }
 
@@ -54,16 +65,15 @@ export default async function (req, res) {
             ],
             mode: 'payment',
             
-            // Success URL includes tracking data and session ID for fulfillment validation
+            // NOTE: Ensure this success_url domain is correct for your Vercel deployment
             success_url: `https://stripe-serverless-phi.vercel.app/success-page.html?tenant_id=${tenant_id}&booking_ref=${booking_ref}&session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: 'https://geordiekingsbeer.github.io/table-picker/customer.html',
             
-            // CRITICAL FIXES: Key names and stringification for webhook compatibility
             metadata: {
-                table_ids: JSON.stringify(table_ids), // Webhook expects 'table_ids' and it must be a string
+                table_ids: JSON.stringify(table_ids),
                 booking_date: booking_date,
                 booking_time: booking_time,
-                customer_email: customer_email, // Passed explicitly for use in webhook logic
+                customer_email: customer_email,
                 customer_name: customer_name,
                 party_size: party_size.toString(),
                 tenant_id: tenant_id,
@@ -72,9 +82,11 @@ export default async function (req, res) {
             customer_email: customer_email,
         });
 
+        // 200 response should include CORS headers (already set via setHeader)
         return res.status(200).json({ sessionId: session.id, url: session.url });
     } catch (error) {
         console.error('Stripe checkout error:', error);
+        // 500 response should include CORS headers
         return res.status(500).json({ error: error.message });
     }
 }
