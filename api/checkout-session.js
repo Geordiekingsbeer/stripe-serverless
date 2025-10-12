@@ -3,8 +3,17 @@ import Stripe from 'stripe';
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 export default async function (req, res) {
-    // NOTE: All CORS headers and OPTIONS handling are managed externally by vercel.json 
-    // and the cors-preflight.js helper file.
+    // --- Manual CORS Handling (CRITICAL FIX for Vercel's Preflight Failures) ---
+    // This explicitly tells the browser that the GitHub origin is allowed.
+    res.setHeader('Access-Control-Allow-Origin', 'https://geordiekingsbeer.github.io');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    // Handle OPTIONS Preflight Request (MUST return 200/204 to proceed)
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end(); 
+    }
+    // -------------------------------------------------------------------------
 
     if (req.method !== 'POST') {
         return res.status(405).send('Method not allowed. Use POST.');
@@ -45,6 +54,7 @@ export default async function (req, res) {
             ],
             mode: 'payment',
             
+            // Success URL uses the new, clean project name
             success_url: `https://dine-checkout-live.vercel.app/success-page.html?tenant_id=${tenant_id}&booking_ref=${booking_ref}&session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: 'https://geordiekingsbeer.github.io/table-picker/customer.html',
             
@@ -61,6 +71,7 @@ export default async function (req, res) {
             customer_email: customer_email,
         });
 
+        // Final 200 response will carry the headers set at the top.
         return res.status(200).json({ sessionId: session.id, url: session.url });
     } catch (error) {
         console.error('Stripe checkout error:', error);
