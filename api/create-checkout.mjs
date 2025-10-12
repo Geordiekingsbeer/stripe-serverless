@@ -1,20 +1,15 @@
 import Stripe from 'stripe';
 
-// Initialize Stripe. Uses STRIPE_SECRET_KEY environment variable.
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-// NOTE: All CORS headers and OPTIONS handling are now managed externally by vercel.json.
-
 export default async function (req, res) {
-    // Vercel's vercel.json handles the OPTIONS preflight request (returns 204).
-    
-    // We only need to check for POST now, as Vercel handles OPTIONS/GET in vercel.json
+    // NOTE: All CORS headers and OPTIONS handling are managed externally by vercel.json 
+    // and the cors-preflight.js helper file.
+
     if (req.method !== 'POST') {
-        // Vercel handles the 405 Method Not Allowed response with the required CORS headers.
         return res.status(405).send('Method not allowed. Use POST.');
     }
 
-    // Since Vercel automatically parses the request body, we can proceed.
     try {
         const { 
             table_ids, 
@@ -30,7 +25,6 @@ export default async function (req, res) {
 
         if (!table_ids || total_pence === undefined || !tenant_id || !booking_ref) {
             console.error("Fulfillment Error: Critical Metadata missing in request body.");
-            // Vercel's vercel.json ensures CORS headers are attached to this 400 response.
             return res.status(400).json({ error: 'Missing critical booking or tracking metadata.' });
         }
 
@@ -67,11 +61,9 @@ export default async function (req, res) {
             customer_email: customer_email,
         });
 
-        // Vercel's vercel.json ensures CORS headers are attached to this 200 response.
         return res.status(200).json({ sessionId: session.id, url: session.url });
     } catch (error) {
         console.error('Stripe checkout error:', error);
-        // Vercel's vercel.json ensures CORS headers are attached to this 500 response.
         return res.status(500).json({ error: error.message });
     }
 }
