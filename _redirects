@@ -1,2 +1,2 @@
-# Handle OPTIONS Preflight for CORS
+# CRITICAL FIX: Bypass CORS preflight for all functions
 /.netlify/functions/* 204!
