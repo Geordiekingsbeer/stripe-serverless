@@ -1,6 +1,9 @@
 [build]
-  command = "" # No command needed, just deploy
-  publish = "public" # Not strictly needed, but good practice
+  # CRITICAL FIX: Tell Netlify the base directory is the repo root.
+  # We set the publish directory to the functions folder, which is where Netlify
+  # can find the files, even though it's API-only.
+  publish = "netlify/functions"
+  command = "" 
 
 [functions]
   directory = "netlify/functions"
