@@ -1,8 +1,15 @@
 [build]
-  # We are using Netlify's default Node functions build
-  # No complex build command needed for this simple setup
+  command = "" # No command needed, just deploy
+  publish = "public" # Not strictly needed, but good practice
 
 [functions]
-  # Tell Netlify where the functions directory is
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "https://geordiekingsbeer.github.io"
+    Access-Control-Allow-Methods = "POST, GET, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+    Access-Control-Max-Age = "86400"
