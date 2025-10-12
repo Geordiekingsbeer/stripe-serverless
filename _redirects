@@ -1,0 +1,2 @@
+# Handle OPTIONS Preflight for CORS
+/.netlify/functions/* 204!
