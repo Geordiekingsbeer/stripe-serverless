@@ -3,16 +3,25 @@ import Stripe from 'stripe';
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 export default async function (req, res) {
-    // --- Manual CORS Handling (Highly reliable fix for Netlify) ---
-    // Netlify respects these headers set manually in the function code.
-    res.setHeader('Access-Control-Allow-Origin', 'https://geordiekingsbeer.github.io');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    // --- Define Headers Locally (CRITICAL for Netlify/Node.js Preflight Fix) ---
+    // These headers must be set for both the OPTIONS and the POST responses.
+    const corsHeaders = {
+        'Access-Control-Allow-Origin': 'https://geordiekingsbeer.github.io',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    };
 
-    // Handle OPTIONS Preflight Request (MUST return 200/204 to proceed)
+    // Apply headers to the response object for ALL subsequent responses
+    Object.keys(corsHeaders).forEach(key => {
+        res.setHeader(key, corsHeaders[key]);
+    });
+
+    // --- CRITICAL: Handle OPTIONS Preflight Directly with Raw End ---
+    // The browser requires a 200 or 204 status with the headers attached before proceeding.
     if (req.method === 'OPTIONS') {
-        // Return 200 OK status for a successful preflight
-        return res.status(200).end(); 
+        // Use Node's low-level response methods to guarantee headers are sent instantly
+        res.writeHead(204, corsHeaders);
+        return res.end(); 
     }
     // -------------------------------------------------------------------------
 
