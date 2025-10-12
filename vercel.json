@@ -11,7 +11,7 @@
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
-          "value": "*"
+          "value": "https://geordiekingsbeer.github.io"
         },
         {
           "key": "Access-Control-Allow-Methods",
@@ -32,7 +32,7 @@
       ],
       "status": 204,
       "headers": {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": "https://geordiekingsbeer.github.io",
         "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
         "Access-Control-Allow-Headers": "Content-Type, Authorization"
       }
