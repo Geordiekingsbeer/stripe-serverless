@@ -1,2 +1,1 @@
-# CRITICAL FIX: Bypass CORS preflight for all functions
-/.netlify/functions/* 204!
+/.netlify/functions/* https://geordiekingsbeer.github.io 200! Access-Control-Allow-Origin=https://geordiekingsbeer.github.io,Access-Control-Allow-Methods=POST,GET,OPTIONS,Access-Control-Allow-Headers=Content-Type,Authorization
