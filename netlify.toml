@@ -1,14 +1,12 @@
 [build]
-  # CRITICAL FIX: Tell Netlify the base directory is the repo root.
-  # We set the publish directory to the functions folder, which is where Netlify
-  # can find the files, even though it's API-only.
-  publish = "netlify/functions"
   command = "" 
+  publish = "netlify/functions"
 
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+# THIS SECTION FORCES HEADERS AT THE CDN LEVEL FOR ALL FUNCTION CALLS
 [[headers]]
   for = "/.netlify/functions/*"
   [headers.values]
