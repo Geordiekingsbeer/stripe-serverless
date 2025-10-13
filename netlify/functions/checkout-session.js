@@ -3,16 +3,26 @@ import Stripe from 'stripe';
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 export default async function (req, res) {
-    // --- Manual CORS Handling (CRITICAL FIX) ---
-    // This explicitly attaches the necessary headers to the response object for POST.
-    res.setHeader('Access-Control-Allow-Origin', 'https://geordiekingsbeer.github.io');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    // --- Define Headers Locally (Final, Aggressive Headers) ---
+    // These headers are defined here, but the successful OPTIONS response
+    // relies on the dedicated _redirects file for the fastest performance.
+    const corsHeaders = {
+        'Access-Control-Allow-Origin': 'https://geordiekingsbeer.github.io',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    };
+
+    // Apply headers to the response object for POST failures/successes
+    Object.keys(corsHeaders).forEach(key => {
+        res.setHeader(key, corsHeaders[key]);
+    });
 
     // Handle OPTIONS Preflight Request (MUST return 200/204 to proceed)
     if (req.method === 'OPTIONS') {
-        // Since Netlify sometimes strips headers, we rely on the JS to set them and return 200/204.
-        return res.status(200).end(); 
+        // We rely on the raw Node response method for Netlify/Vercel bypass.
+        // This is the last line of defense if the _redirects file fails.
+        res.writeHead(204, corsHeaders);
+        return res.end(); 
     }
     // -------------------------------------------------------------------------
 
