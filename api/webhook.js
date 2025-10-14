@@ -1,101 +1,173 @@
-// api/webhook.js (Stripe Webhook Handler - Final Schema Alignment)
+// File: /api/webhook.js
+// FINAL DEFINITIVE VERSION: Minimalist fulfillment payload to eliminate schema crashes.
 
-import { buffer } from 'micro';
-import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import Stripe from 'stripe'; 
+import { createClient } from '@supabase/supabase-js'; 
+import { Readable } from 'stream'; 
 
-// --- Configuration Checks ---
-const supabaseUrl = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
+// NOTE: YOU MUST REPLACE THIS PLACEHOLDER WITH THE ACTUAL WEBHOOK URL GIVEN BY MAKE/ZAPIER
+const MAKE_NOTIFICATION_URL = 'https://hook.eu2.make.com/vk4e7bupgsynan7olb6k1a4lxpdnwtwy'; 
 
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-
-if (!STRIPE_SECRET_KEY) throw new Error("CRITICAL: STRIPE_SECRET_KEY is missing from Vercel ENV.");
-if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("CRITICAL: SUPABASE_SERVICE_ROLE_KEY is missing from Vercel ENV.");
-if (!STRIPE_WEBHOOK_SECRET) throw new Error("CRITICAL: STRIPE_WEBHOOK_SECRET is missing from Vercel ENV.");
-
-
-const supabase = createClient(supabaseUrl, SUPABASE_SERVICE_ROLE_KEY);
-const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2022-11-15' });
-
-export const config = { api: { bodyParser: false } };
-
-function calculateEndTime(startTime) {
-    const parts = startTime.split(':').map(Number);
-    const date = new Date(0, 0, 0, parts[0], parts[1]);
-    date.setHours(date.getHours() + 1);
-    const endH = String(date.getHours()).padStart(2, '0');
-    const endM = String(date.getMinutes()).padStart(2, '0');
-    return `${endH}:${endM}:00`;
+// Helper function to convert the raw request stream into a buffer (CRITICAL for Stripe verification)
+async function buffer(readable) {
+    const chunks = [];
+    for await (const chunk of readable) {
+        chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
 }
 
+// This function calculates the estimated end time based on a standard duration (e.g., 2 hours)
+function calculateEndTime(startTime) {
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const durationHours = 2; 
+    let endHour = hours + durationHours;
+    
+    if (endHour >= 24) { endHour -= 24; } 
 
-export default async function handler(req, res) {
-    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+    const endHourStr = String(endHour).padStart(2, '0');
+    const endMinuteStr = String(minutes).padStart(2, '0'); 
 
-    const buf = await buffer(req);
-    const signature = req.headers['stripe-signature'];
+    return `${endHourStr}:${endMinuteStr}`;
+}
+
+// --- CRITICAL ENVIRONMENT VARIABLES ---
+const SUPABASE_URL = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; 
+const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET; 
+// ------------------------------------
+
+// Initialize clients
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+const _supaAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+
+export default async function (req, res) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
     let event;
+    
+    if (req.method !== 'POST') {
+        return res.status(405).send('Method not allowed.');
+    }
 
+    const buf = await buffer(req); 
+    const sig = req.headers['stripe-signature'];
+    
     try {
-        event = stripe.webhooks.constructEvent(buf, signature, STRIPE_WEBHOOK_SECRET);
+        event = stripe.webhooks.constructEvent(
+            buf, sig, WEBHOOK_SECRET
+        );
     } catch (err) {
-        console.error(`⚠️ Webhook signature verification failed: ${err.message}`);
-        return res.status(400).send(`Webhook Error: ${err.message}`);
+        console.error('--- STRIPE SIGNATURE FAILURE ---');
+        return res.status(400).send(`Webhook Error: Signature verification failed.`);
     }
 
     if (event.type === 'checkout.session.completed') {
         const session = event.data.object;
-        const metadata = session.metadata;
+        
+        // Retrieve ALL necessary metadata
+        const tableIdsString = session.metadata.table_ids_list;
+        const customerEmail = session.metadata.customer_email;
+        const bookingDate = session.metadata.booking_date;
+        const startTime = session.metadata.booking_time;
+        const customerName = session.metadata.customer_name;
+        const partySize = session.metadata.party_size;
+        const tenantId = session.metadata.tenant_id;
+        const bookingRef = session.metadata.booking_ref;
+        const totalPence = session.amount_total;
 
-        if (!metadata || !metadata.table_ids) {
-            console.error('Missing required metadata (table_ids).');
-            return res.status(400).json({ received: true, message: 'Missing metadata.' });
+        if (!tenantId || !bookingRef) {
+            return res.status(500).json({ received: true, status: 'Metadata Missing' });
+        }
+        
+        // 1. IDEMPOTENCY CHECK (Prevents double processing)
+        const { data: existingTrackingData } = await _supaAdmin
+            .from('engagement_tracking')
+            .select('payment_successful')
+            .eq('booking_ref', bookingRef)
+            .maybeSingle();
+
+        if (existingTrackingData && existingTrackingData.payment_successful === true) {
+            console.warn(`Idempotency Check: Booking reference ${bookingRef} already processed successfully. Skipping fulfillment.`);
+            await logConversionStatusUpdate(tenantId, bookingRef); 
+            return res.status(200).json({ received: true, status: 'Already Processed' });
         }
 
-        try {
-            const tableIds = JSON.parse(metadata.table_ids);
-            if (!Array.isArray(tableIds) || tableIds.length === 0) throw new Error("Parsed table_ids is empty or not an array.");
 
-            const bookingTime = metadata.booking_time;
-            const endTime = calculateEndTime(bookingTime);
-            const customerEmail = metadata.customer_email || session.customer_details?.email || 'N/A';
+        // 2. FULFILLMENT: Insert into premium_slots
+        const endTime = calculateEndTime(startTime);
+        const tableIdsArray = tableIdsString.split(',').map(id => Number(id));
 
-            const insertions = tableIds.map(id => ({
-                tenant_id: metadata.tenant_id,
-                table_id: Number(id),
-                date: metadata.booking_date,
-                start_time: bookingTime + ':00',
-                end_time: endTime,
-                host_notes: `Customer: ${metadata.customer_name}, Party: ${metadata.party_size}, Ref: ${metadata.booking_ref}, Stripe ID: ${session.id}`,
-                
-                // --- ALIGNMENT FIXES ---
-                stripe_order_id: session.id, // Column exists in your table
-                booking_ref: metadata.booking_ref, // Column exists in your table
-                customer_email: customerEmail, // NEW Column created in Step 1
-                // --- REMOVED: is_premium (Does not exist in your table) ---
-                // -----------------------
-            }));
+        // CRITICAL FIX: MINIMAL PAYLOAD
+        const bookingsToInsert = tableIdsArray.map(tableId => ({
+            table_id: tableId,
+            date: bookingDate, 
+            start_time: startTime, 
+            end_time: endTime, 
+            tenant_id: tenantId, 
+            booking_ref: bookingRef,
+            // REMOVING host_notes and stripe_order_id from this payload to ensure the INSERT succeeds.
+        }));
 
-            // Insert the records into Supabase, with RLS hardening
-            const { error: insertError } = await supabase
-                .from('premium_slots')
-                .insert(insertions, { returning: 'minimal', defaultToNull: true });
+        // 3. BULK INSERT into premium_slots (THE FULFILLMENT STEP)
+        const { error: insertError } = await _supaAdmin
+            .from('premium_slots')
+            .insert(bookingsToInsert);
 
-            if (insertError) {
-                console.error('Supabase FINAL INSERT FAILURE:', insertError.message, 'Payload:', JSON.stringify(insertions));
-                throw new Error(insertError.message);
-            }
+        if (insertError) {
+            console.error('--- SUPABASE BULK INSERT FAILED (FINAL BOOKING CRASH) ---');
+            console.error('Code:', insertError.code, 'Message:', insertError.message);
+            // Returning 500 signals Stripe to retry, which is correct since fulfillment failed.
+            return res.status(500).json({ received: false, status: 'Fulfillment Insert Failed' });
+        }
+        
+        // 4. NOTIFICATION & TRACKING UPDATE
+        
+        // Log conversion success (analytic tracking)
+        await logConversionStatusUpdate(tenantId, bookingRef);
 
-            console.log(`SUCCESS: Recorded ${insertions.length} premium booking(s) for tenant ${metadata.tenant_id}.`);
-            return res.status(200).json({ received: true, message: 'Bookings recorded successfully.' });
+        // Build notification payload
+        const notificationPayload = {
+            tenantId: tenantId,
+            bookingRef: bookingRef,
+            customerName: customerName,
+            partySize: partySize,
+            tableCount: tableIdsArray.length,
+            tableIds: tableIdsString,
+            bookingDate: bookingDate,
+            startTime: startTime,
+            totalValue: (totalPence / 100).toFixed(2), // Convert pence to currency
+            customerEmail: customerEmail,
+        };
 
-        } catch (dbError) {
-            console.error('Webhook Runtime/DB Operation Failed:', dbError.message);
-            return res.status(500).json({ received: false, error: 'Database operation failed.', detail: dbError.message });
+        // Trigger Make/Zapier notification (Fire-and-forget for speed)
+        if (MAKE_NOTIFICATION_URL && MAKE_NOTIFICATION_URL !== 'YOUR_MAKE_WEBHOOK_URL_HERE') {
+            fetch(MAKE_NOTIFICATION_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(notificationPayload),
+            }).catch(e => console.error("Make/Zapier Notification Failed:", e.message));
+        }
+        
+        console.log(`Successfully fulfilled booking ${bookingRef}.`);
+    } 
+
+    // CRITICAL: New helper function to update tracking status
+    async function logConversionStatusUpdate(tenantId, bookingRef) {
+        const { error: trackingError } = await _supaAdmin
+            .from('engagement_tracking')
+            .update({ 
+                payment_successful: true 
+            })
+            .eq('tenant_id', tenantId)
+            .eq('booking_ref', bookingRef);
+
+        if (trackingError) {
+            console.error('--- TRACKING STATUS UPDATE FAILED ---');
         }
     }
 
-    return res.status(200).json({ received: true, message: `Handled event: ${event.type}` });
+    // 5. Return 200 response to Stripe to acknowledge success (FINAL STEP)
+    return res.status(200).json({ received: true });
 }
