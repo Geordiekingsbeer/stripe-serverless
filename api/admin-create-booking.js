@@ -1,129 +1,58 @@
-// /api/admin-create-booking.mjs
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ success: false, error: "Method not allowed" });
-  }
+// File: /api/admin-create-booking.js
+import { createClient } from '@supabase/supabase-js';
 
-  try {
-    const body = await req.json ? await req.json() : req.body;
+// --- CRITICAL ENVIRONMENT VARIABLES ---
+// NOTE: These variables must be set in your Vercel dashboard for this function to work.
+const SUPABASE_URL = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
+// This key must be set in your Vercel Environment Variables!
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; 
 
-    const hasSingle = body.table_id !== undefined && body.table_id !== null;
-    const hasBulk = Array.isArray(body.table_ids) && body.table_ids.length > 0;
-    if (!hasSingle && !hasBulk) {
-      return res.status(400).json({ success: false, error: "No table_id or table_ids provided." });
+const _supaAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+export default async function (req, res) {
+    // 1. CORS FIX: Allows requests from your specific GitHub Pages domain
+    res.setHeader('Access-Control-Allow-Origin', 'https://geordiekingsbeer.github.io');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Handle the preflight OPTIONS request that all browsers send for CORS
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
     }
 
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const RESEND_API_KEY = process.env.RESEND_API_KEY;
-    const EMAIL_FROM = process.env.EMAIL_FROM || "Bookings <bookings@yourdomain.com>";
-    const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || "";
-    const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return res.status(500).json({ success: false, error: "Server missing Supabase env vars." });
+    if (req.method !== 'POST') {
+        return res.status(405).send('Method Not Allowed');
     }
 
-    // Build rows
-    const buildRow = (tableId) => ({
-      tenant_id: body.tenant_id || DEFAULT_TENANT_ID,
-      table_id: Number(tableId),
-      date: body.date,
-      start_time: body.start_time ? (body.start_time.length === 5 ? body.start_time + ":00" : body.start_time) : null,
-      end_time: body.end_time ? (body.end_time.length === 5 ? body.end_time + ":00" : body.end_time) : null,
-      host_notes: body.notes || body.host_notes || "Admin Manual Booking",
-    });
+    // 2. Extract data sent from the Admin page
+    const { tableId, date, startTime, endTime, notes, tenantId } = req.body;
 
-    let rows = [];
-    if (hasSingle) rows.push(buildRow(body.table_id));
-    if (hasBulk) rows = body.table_ids.map(buildRow);
-
-    // Insert into Supabase REST endpoint
-    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/premium_slots`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        apikey: SUPABASE_SERVICE_ROLE_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(rows),
-    });
-
-    const insertJson = await insertRes.json();
-    if (!insertRes.ok) {
-      console.error("Supabase insert error:", insertJson);
-      throw new Error("Supabase insert failed: " + (insertJson?.message || JSON.stringify(insertJson)));
+    if (!tableId || !date || !startTime || !endTime || !tenantId) {
+        return res.status(400).json({ error: 'Missing required booking data.' });
     }
 
-    // Decide who to email
-    const recipient = body.staff_email || ADMIN_EMAIL;
-    if (!recipient) {
-      return res.status(200).json({
-        success: true,
-        booking: insertJson,
-        emailSent: false,
-        message: "No staff email provided or ADMIN_EMAIL set.",
-      });
+    const newBooking = {
+        table_id: tableId,
+        date: date,
+        start_time: startTime,
+        end_time: endTime,
+        host_notes: notes,
+        tenant_id: tenantId,
+    };
+
+    // 3. Perform the secure insertion using the Service Role Key
+    try {
+        // This insertion uses the highly privileged key, bypassing the RLS that caused the 401
+        const { data, error } = await _supaAdmin.from('premium_slots').insert([newBooking]);
+
+        if (error) {
+            console.error('Admin booking failed:', error);
+            // Return a clean error message, not the full Supabase error
+            return res.status(500).json({ error: 'Database insert failed. Check Vercel logs.' });
+        }
+        return res.status(200).json({ message: 'Booking created successfully!', data });
+    } catch (err) {
+        console.error('Server error during admin booking:', err);
+        return res.status(500).json({ error: 'Internal server error.' });
     }
-
-    // Build email HTML
-    const subject =
-      rows.length > 1
-        ? `Premium Booking Confirmed — ${rows.length} tables`
-        : `Premium Booking Confirmed — Table ${insertJson[0]?.table_id}`;
-
-    let html = `<h2>Premium Booking Confirmed</h2><p>The following premium booking(s) were created:</p><ul>`;
-    insertJson.forEach((r) => {
-      const start = r.start_time ? r.start_time.substring(0, 5) : "";
-      const end = r.end_time ? r.end_time.substring(0, 5) : "";
-      html += `<li><strong>Table ${r.table_id}</strong> — ${r.date} ${start}–${end}</li>`;
-    });
-    html += `</ul><p><strong>Notes:</strong> ${rows.map((r) => r.host_notes).join(" ; ")}</p>`;
-
-    if (!RESEND_API_KEY) {
-      return res.status(200).json({
-        success: true,
-        booking: insertJson,
-        emailSent: false,
-        message: "RESEND_API_KEY not configured.",
-      });
-    }
-
-    // Send email via Resend
-    const emailRes = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
-        from: EMAIL_FROM,
-        to: [recipient],
-        subject,
-        html,
-      }),
-    });
-
-    const emailJson = await emailRes.json();
-    if (!emailRes.ok) {
-      console.error("Resend email error:", emailJson);
-      return res.status(207).json({
-        success: true,
-        booking: insertJson,
-        emailSent: false,
-        emailError: emailJson,
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      booking: insertJson,
-      emailSent: true,
-      emailResponse: emailJson,
-    });
-  } catch (err) {
-    console.error("Server error:", err);
-    return res.status(500).json({ success: false, error: err.message || String(err) });
-  }
 }
