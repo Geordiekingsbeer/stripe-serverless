@@ -1,16 +1,38 @@
 // File: /api/create-checkout.js
 
 import Stripe from 'stripe';
+import Cors from 'cors'; // ADDED: CORS import for external domains
+// NOTE: Supabase imports are not strictly necessary here, but good practice if you use them later.
 
 // --- CRITICAL ENVIRONMENT VARIABLES (Must be set in Vercel Dashboard) ---
 // Initialize Stripe. Uses STRIPE_SECRET_KEY environment variable.
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-export default async function (req, res) {
-    // Set CORS headers for security and browser compatibility
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+// --- CORS Configuration ---
+// CRITICAL: This allows requests ONLY from your GitHub Pages URL.
+const cors = Cors({
+  methods: ['POST', 'OPTIONS'],
+  origin: 'https://geordiekingsbeer.github.io', // <--- YOUR FRONTEND DOMAIN
+  optionsSuccessStatus: 200, 
+});
+
+// Middleware runner helper (needed to use the 'cors' library in Vercel/Next.js API)
+function runMiddleware(req, res, fn) {
+  return new Promise((resolve, reject) => {
+    fn(req, res, (result) => {
+      if (result instanceof Error) {
+        return reject(result);
+      }
+      return resolve(result);
+    });
+  });
+}
+// ----------------------------
+
+
+export default async function handler(req, res) {
+    // 1. Run CORS middleware
+    await runMiddleware(req, res, cors); 
 
     // Handle the preflight OPTIONS request
     if (req.method === 'OPTIONS') {
@@ -22,22 +44,23 @@ export default async function (req, res) {
     }
 
     try {
-        const { 
-            table_ids, 
-            booking_date, 
-            booking_time, 
-            customer_email, 
-            customer_name, // <--- THIS VARIABLE WAS NOT BEING READ CORRECTLY
-            party_size, 
-            total_pence, 
-            tenant_id, 
+        // NOTE: Destructuring variable names match client-side request
+        const { 
+            table_ids, 
+            booking_date, 
+            booking_time, 
+            email, // Changed from customer_email to match client-side var
+            customer_name, 
+            party_size, 
+            total_pence, 
+            tenant_id, 
             booking_ref
         } = req.body;
 
-        // Basic input validation 
+        // Basic input validation 
         if (!table_ids || total_pence === undefined || !tenant_id || !booking_ref) {
-             console.error("Fulfillment Error: Critical Metadata missing in request body.");
-             return res.status(400).json({ error: 'Missing critical booking or tracking metadata.' });
+              console.error("Fulfillment Error: Critical Metadata missing in request body.");
+              return res.status(400).json({ error: 'Missing critical booking or tracking metadata.' });
         }
 
         const session = await stripe.checkout.sessions.create({
@@ -47,7 +70,6 @@ export default async function (req, res) {
                     price_data: {
                         currency: 'gbp',
                         product_data: {
-                            // FIX: Ensure customer_name and party_size are used in the description
                             name: `Premium Table Slot Booking`,
                             description: `Reservation for ${customer_name} (Party of ${party_size}) on ${booking_date} at ${booking_time}. Total tables: ${table_ids.length}.`,
                         },
@@ -58,22 +80,23 @@ export default async function (req, res) {
             ],
             mode: 'payment',
             
-            // CRITICAL FIX: Pass tracking IDs back to the success page URL
-            success_url: `https://stripe-serverless-phi.vercel.app/success-page.html?tenant_id=${tenant_id}&booking_ref=${booking_ref}`,
-            cancel_url: 'https://geordiekingsbeer.github.io/table-picker/customer.html',
+            // CRITICAL FIX: Ensure Success/Cancel URLs point to your GitHub Pages domain
+            success_url: `https://geordiekingsbeer.github.io/table-picker/success.html?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `https://geordiekingsbeer.github.io/table-picker/pick-seat.html`,
             
             // Pass ALL necessary data for the webhook and database insert
             metadata: {
-                table_ids_list: table_ids.join(','),
-                booking_date,
-                booking_time,
-                customer_email,
-                customer_name,
-                party_size,
-                tenant_id,      // Passed to metadata for webhook database insert
-                booking_ref,    // Passed to metadata for webhook tracking insert
+                // Stripe requires metadata values to be strings
+                table_ids_list: JSON.stringify(table_ids), // Use JSON.stringify for array
+                booking_date: String(booking_date),
+                booking_time: String(booking_time),
+                customer_email: String(email),
+                customer_name: String(customer_name),
+                party_size: String(party_size),
+                tenant_id: String(tenant_id),      
+                booking_ref: String(booking_ref),    
             },
-            customer_email: customer_email,
+            customer_email: email, // Set primary Stripe email
         });
 
         return res.status(200).json({ sessionId: session.id, url: session.url });
