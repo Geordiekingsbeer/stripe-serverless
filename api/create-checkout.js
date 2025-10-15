@@ -1,48 +1,43 @@
 // File: /api/create-checkout.js
 
 import Stripe from 'stripe';
-// NOTE: We remove the 'cors' import since we are using manual headers now.
 
 // --- CRITICAL ENVIRONMENT VARIABLES (Must be set in Vercel Dashboard) ---
+// Initialize Stripe. Uses STRIPE_SECRET_KEY environment variable.
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-export default async function handler(req, res) {
-    // 1. MANUALLY SET CORS HEADERS (The brute-force fix)
-    const allowedOrigin = 'https://geordiekingsbeer.github.io';
-    
-    res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-    res.setHeader(
-        'Access-Control-Allow-Headers',
-        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    );
-    
+export default async function (req, res) {
+    // Set CORS headers for security and browser compatibility
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
     // Handle the preflight OPTIONS request
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
-    
+
     if (req.method !== 'POST') {
         return res.status(405).send('Method not allowed.');
     }
 
     try {
-        const {
-            table_ids,
-            booking_date,
-            booking_time,
-            email,
-            customer_name,
-            party_size,
-            total_pence,
-            tenant_id,
+        const { 
+            table_ids, 
+            booking_date, 
+            booking_time, 
+            customer_email, 
+            customer_name, // <--- THIS VARIABLE WAS NOT BEING READ CORRECTLY
+            party_size, 
+            total_pence, 
+            tenant_id, 
             booking_ref
         } = req.body;
 
+        // Basic input validation 
         if (!table_ids || total_pence === undefined || !tenant_id || !booking_ref) {
-              console.error("Fulfillment Error: Critical Metadata missing in request body.");
-              return res.status(400).json({ error: 'Missing critical booking or tracking metadata.' });
+             console.error("Fulfillment Error: Critical Metadata missing in request body.");
+             return res.status(400).json({ error: 'Missing critical booking or tracking metadata.' });
         }
 
         const session = await stripe.checkout.sessions.create({
@@ -52,6 +47,7 @@ export default async function handler(req, res) {
                     price_data: {
                         currency: 'gbp',
                         product_data: {
+                            // FIX: Ensure customer_name and party_size are used in the description
                             name: `Premium Table Slot Booking`,
                             description: `Reservation for ${customer_name} (Party of ${party_size}) on ${booking_date} at ${booking_time}. Total tables: ${table_ids.length}.`,
                         },
@@ -62,21 +58,22 @@ export default async function handler(req, res) {
             ],
             mode: 'payment',
             
-            // CRITICAL: Success/Cancel URLs must point to your GitHub Pages domain
-            success_url: `https://geordiekingsbeer.github.io/table-picker/success.html?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `https://geordiekingsbeer.github.io/table-picker/pick-seat.html`,
+            // CRITICAL FIX: Pass tracking IDs back to the success page URL
+            success_url: `https://stripe-serverless-phi.vercel.app/success-page.html?tenant_id=${tenant_id}&booking_ref=${booking_ref}`,
+            cancel_url: 'https://geordiekingsbeer.github.io/table-picker/customer.html',
             
+            // Pass ALL necessary data for the webhook and database insert
             metadata: {
-                table_ids_list: JSON.stringify(table_ids),
-                booking_date: String(booking_date),
-                booking_time: String(booking_time),
-                customer_email: String(email),
-                customer_name: String(customer_name),
-                party_size: String(party_size),
-                tenant_id: String(tenant_id),
-                booking_ref: String(booking_ref),
+                table_ids_list: table_ids.join(','),
+                booking_date,
+                booking_time,
+                customer_email,
+                customer_name,
+                party_size,
+                tenant_id,      // Passed to metadata for webhook database insert
+                booking_ref,    // Passed to metadata for webhook tracking insert
             },
-            customer_email: email,
+            customer_email: customer_email,
         });
 
         return res.status(200).json({ sessionId: session.id, url: session.url });
