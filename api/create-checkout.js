@@ -1,7 +1,6 @@
 import Stripe from 'stripe';
 
-// Initialize Stripe once, using the secret key set in Vercel dashboard.
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export default async function handler(req, res) {
   // ----------  C O R S  ----------
@@ -17,42 +16,56 @@ export default async function handler(req, res) {
 
   try {
     const {
-      tableId,
-      date,
-      startTime,
-      endTime,
-      notes,
-      tenantId
+      table_ids,
+      booking_date,
+      booking_time,
+      customer_email,
+      customer_name,
+      party_size,
+      total_pence,
+      tenant_id,
+      booking_ref
     } = req.body;
 
-    // Basic guard-rails
-    if (!tableId || !date || !startTime || !endTime || !tenantId) {
-      console.warn('Admin booking rejected: missing required fields');
-      return res.status(400).json({ error: 'Missing required booking data.' });
+    if (!table_ids || total_pence === undefined || !tenant_id || !booking_ref) {
+      console.warn('Missing critical metadata');
+      return res.status(400).json({ error: 'Missing critical booking metadata.' });
     }
 
-    // Create the booking row in Supabase via the service-role key
-    const { data, error } = await supabaseAdmin
-      .from('premium_slots')
-      .insert([{
-        table_id: Number(tableId),
-        date,
-        start_time: startTime,
-        end_time: endTime,
-        host_notes: notes || '',
-        tenant_id: tenantId
-      }])
-      .select()
-      .single();
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'gbp',
+            product_data: {
+              name: 'Premium Table Slot Booking',
+              description: `Reservation for ${customer_name} (Party of ${party_size}) on ${booking_date} at ${booking_time}. Total tables: ${table_ids.length}.`
+            },
+            unit_amount: total_pence
+          },
+          quantity: 1
+        }
+      ],
+      mode: 'payment',
+      success_url: `https://dine-checkout-live-Enecz1kcD4QehARGjVTWfwzLSLsY.vercel.app/success-page.html?tenant_id=${tenant_id}&booking_ref=${booking_ref}`,
+      cancel_url: 'https://geordiekingsbeer.github.io/table-picker/pick-seat.html',
+      metadata: {
+        table_ids_list: table_ids.join(','),
+        booking_date,
+        booking_time,
+        customer_email,
+        customer_name,
+        party_size,
+        tenant_id,
+        booking_ref
+      },
+      customer_email
+    });
 
-    if (error) {
-      console.error('Supabase insert failed:', error);
-      return res.status(500).json({ error: 'Database insert failed.' });
-    }
-
-    return res.status(200).json({ message: 'Booking created.', booking: data });
+    return res.status(200).json({ sessionId: session.id, url: session.url });
   } catch (err) {
-    console.error('Admin booking error:', err);
-    return res.status(500).json({ error: 'Server error.' });
+    console.error('Stripe checkout error:', err);
+    return res.status(500).json({ error: err.message });
   }
 }
