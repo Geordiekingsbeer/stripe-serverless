@@ -1,42 +1,21 @@
 // File: /api/admin-create-booking.js
-
 import { createClient } from '@supabase/supabase-js';
-import Cors from 'cors'; // ADDED: Import Cors library
 
 // --- CRITICAL ENVIRONMENT VARIABLES ---
+// NOTE: These variables must be set in your Vercel dashboard for this function to work.
 const SUPABASE_URL = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
 // This key must be set in your Vercel Environment Variables!
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; 
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; 
 
 const _supaAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// --- CORS Configuration ---
-// CRITICAL: This allows requests ONLY from your GitHub Pages URL.
-const cors = Cors({
-  methods: ['POST', 'OPTIONS'],
-  origin: 'https://geordiekingsbeer.github.io', // <--- YOUR FRONTEND DOMAIN
-  optionsSuccessStatus: 200, 
-});
+export default async function (req, res) {
+    // 1. CORS FIX: Allows requests from your specific GitHub Pages domain
+    res.setHeader('Access-Control-Allow-Origin', 'https://geordiekingsbeer.github.io');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-// Middleware runner helper
-function runMiddleware(req, res, fn) {
-  return new Promise((resolve, reject) => {
-    fn(req, res, (result) => {
-      if (result instanceof Error) {
-        return reject(result);
-      }
-      return resolve(result);
-    });
-  });
-}
-// ----------------------------
-
-
-export default async function handler(req, res) {
-    // 1. Run CORS middleware (Replaces the manual res.setHeader lines)
-    await runMiddleware(req, res, cors); 
-
-    // Handle the preflight OPTIONS request
+    // Handle the preflight OPTIONS request that all browsers send for CORS
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
