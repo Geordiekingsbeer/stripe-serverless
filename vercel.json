@@ -1,0 +1,13 @@
+{
+  "rewrites": [
+    // This rule routes requests to /pick-seat.html to the correct file location inside the public folder.
+    { "source": "/pick-seat.html", "destination": "/public/pick-seat.html" },
+    { "source": "/admin.html", "destination": "/public/admin.html" },
+    { "source": "/success.html", "destination": "/public/success.html" },
+    { "source": "/floorplan.png", "destination": "/public/floorplan.png" },
+    { "source": "/T1.png", "destination": "/public/T1.png" },
+    { "source": "/index.html", "destination": "/public/index.html" },
+    // This allows the root / to redirect to your main page
+    { "source": "/", "destination": "/public/pick-seat.html" }
+  ]
+}
