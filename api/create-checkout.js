@@ -3,12 +3,12 @@ import Stripe from 'stripe';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export default async function handler(req, res) {
-  // ----------  C O R S  ----------
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  /* ----------  C O R S  ---------- */
+  res.setHeader('Access-Control-Allow-Origin', 'https://geordiekingsbeer.github.io');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  // --------------------------------
+  /* ------------------------------- */
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed.' });
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
         }
       ],
       mode: 'payment',
-      success_url: `https://dine-checkout-live-Enecz1kcD4QehARGjVTWfwzLSLsY.vercel.app/success-page.html?tenant_id=${tenant_id}&booking_ref=${booking_ref}`,
+      success_url: `https://dine-checkout-live.vercel.app/success-page.html?tenant_id=${tenant_id}&booking_ref=${booking_ref}`,
       cancel_url: 'https://geordiekingsbeer.github.io/table-picker/pick-seat.html',
       metadata: {
         table_ids_list: table_ids.join(','),
@@ -69,3 +69,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+```
