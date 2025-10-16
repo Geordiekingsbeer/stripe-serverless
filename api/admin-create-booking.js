@@ -2,20 +2,19 @@
 import { createClient } from '@supabase/supabase-js';
 
 // --- CRITICAL ENVIRONMENT VARIABLES ---
-// NOTE: These variables must be set in your Vercel dashboard for this function to work.
+// Make sure these are set in Vercel Environment Variables
 const SUPABASE_URL = 'https://Rrjvdabtqzkaomjuiref.supabase.co';
-// This key must be set in your Vercel Environment Variables!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; 
 
 const _supaAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 export default async function (req, res) {
-    // 1. CORS FIX: Allows requests from your specific GitHub Pages domain
+    // 1. CORS headers (allow your admin frontend)
     res.setHeader('Access-Control-Allow-Origin', 'https://geordiekingsbeer.github.io');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Handle the preflight OPTIONS request that all browsers send for CORS
+    // Preflight OPTIONS request
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
@@ -24,7 +23,7 @@ export default async function (req, res) {
         return res.status(405).send('Method Not Allowed');
     }
 
-    // 2. Extract data sent from the Admin page
+    // 2. Extract data from request body
     const { tableId, date, startTime, endTime, notes, tenantId } = req.body;
 
     if (!tableId || !date || !startTime || !endTime || !tenantId) {
@@ -40,16 +39,18 @@ export default async function (req, res) {
         tenant_id: tenantId,
     };
 
-    // 3. Perform the secure insertion using the Service Role Key
+    // 3. Insert using Supabase Service Role Key
     try {
-        // This insertion uses the highly privileged key, bypassing the RLS that caused the 401
-        const { data, error } = await _supaAdmin.from('premium_slots').insert([newBooking]);
+        const { data, error } = await _supaAdmin
+            .from('premium_slots')
+            .insert([newBooking])
+            .select(); // <-- ensures inserted row is returned
 
         if (error) {
             console.error('Admin booking failed:', error);
-            // Return a clean error message, not the full Supabase error
             return res.status(500).json({ error: 'Database insert failed. Check Vercel logs.' });
         }
+
         return res.status(200).json({ message: 'Booking created successfully!', data });
     } catch (err) {
         console.error('Server error during admin booking:', err);
