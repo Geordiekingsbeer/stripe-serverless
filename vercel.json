@@ -4,12 +4,8 @@
       "source": "/api/(.*)",
       "headers": [
         {
-          "key": "Access-Control-Allow-Credentials",
-          "value": "true"
-        },
-        {
           "key": "Access-Control-Allow-Origin",
-          "value": "https://geordiekingsbeer.github.io" 
+          "value": "https://geordiekingsbeer.github.io" // Single, exact origin
         },
         {
           "key": "Access-Control-Allow-Methods",
@@ -17,7 +13,11 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
+          "value": "Content-Type" 
+          // Note: If you have a second origin for local testing, 
+          // you MUST use the function-based CORS check, not vercel.json.
+          // Since you're still seeing the CORS error, use the wildcard for now:
+          // "value": "*" 
         }
       ]
     }
